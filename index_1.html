@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HoloMed 3D — Mesa Holográfica Médica</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cyan:#00F5FF;--blue:#0066FF;--green:#00FF88;--pink:#FF006E;--amber:#FFB800;--purple:#7C3AED;
+  --bg:#020408;--panel:rgba(5,12,24,0.96);--glass:rgba(0,200,255,0.04);--glass2:rgba(0,200,255,0.09);
+  --border:rgba(0,200,255,0.13);--border2:rgba(0,200,255,0.28);
+  --text:#E8F4FF;--text2:#7AA4C8;--text3:#3A5870;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{color:var(--text);font-family:'Inter',sans-serif;cursor:none;user-select:none}
+
+/* ── CURSOR ── */
+#cur{position:fixed;width:11px;height:11px;border:1.5px solid var(--cyan);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);mix-blend-mode:screen;transition:width .12s,height .12s,background .12s}
+#curR{position:fixed;width:30px;height:30px;border:0.5px solid rgba(0,245,255,0.25);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%)}
+
+/* ── BG FX ── */
+#scan{position:fixed;inset:0;pointer-events:none;z-index:8900;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,10,20,0.1) 2px,rgba(0,10,20,0.1) 4px);opacity:.3}
+#grid{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,200,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,.03) 1px,transparent 1px);
+  background-size:55px 55px;mask-image:radial-gradient(ellipse 85% 85% at 50% 50%,black 30%,transparent 100%)}
+#ptcl{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+.pt{position:absolute;border-radius:50%;animation:ptUp linear infinite}
+@keyframes ptUp{0%{transform:translateY(100vh) scale(0);opacity:0}8%{opacity:1}92%{opacity:.4}100%{transform:translateY(-8vh) scale(1);opacity:0}}
+
+/* ── LAYOUT ── */
+#app{position:relative;display:flex;height:100vh;flex-direction:column;z-index:10}
+
+/* ── TOPBAR ── */
+#topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;height:54px;flex-shrink:0;
+  border-bottom:0.5px solid var(--border);
+  background:linear-gradient(180deg,rgba(2,4,8,.98),rgba(4,9,18,.94));
+  backdrop-filter:blur(24px);position:relative;z-index:200
+}
+.logo{display:flex;align-items:center;gap:11px;font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--cyan);letter-spacing:-.5px}
+.logo-icon{width:32px;height:32px;border:1.5px solid var(--cyan);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(0,245,255,.06);box-shadow:0 0 12px rgba(0,245,255,.15)}
+.logo sub{color:var(--text2);font-weight:400;font-size:10px;font-family:'JetBrains Mono',monospace;margin-left:3px;letter-spacing:.3px}
+.nav-tabs{display:flex;gap:2px}
+.ntab{padding:6px 14px;border-radius:5px;cursor:pointer;color:var(--text3);transition:all .2s;border:none;background:none;font-family:'JetBrains Mono',monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:1px}
+.ntab:hover{color:var(--text2);background:var(--glass)}
+.ntab.on{color:var(--cyan);background:rgba(0,245,255,.08);box-shadow:inset 0 -1.5px 0 var(--cyan)}
+.tr{display:flex;align-items:center;gap:9px}
+.chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:.5px solid var(--border2);background:var(--glass);font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 2s ease infinite;box-shadow:0 0 6px var(--green)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.uchip{display:flex;align-items:center;gap:7px;padding:4px 11px 4px 4px;border-radius:20px;border:.5px solid var(--border);background:var(--glass);cursor:pointer;transition:border-color .2s}
+.uchip:hover{border-color:var(--border2)}
+.uav{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff}
+.uname{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text2)}
+
+/* ── MAIN ROW ── */
+#main{display:flex;flex:1;overflow:hidden;position:relative}
+
+/* ── LEFT SIDEBAR ── */
+#sb{
+  width:264px;flex-shrink:0;
+  border-right:.5px solid var(--border);
+  background:linear-gradient(180deg,rgba(2,4,9,.98),rgba(4,10,20,.96));
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:width .32s cubic-bezier(.4,0,.2,1);
+  position:relative;z-index:50
+}
+#sb.off{width:0}
+.stabs{display:flex;border-bottom:.5px solid var(--border);flex-shrink:0}
+.stab{flex:1;padding:9px 4px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.5px;color:var(--text3);cursor:pointer;transition:all .2s;text-transform:uppercase;border-bottom:1.5px solid transparent;white-space:nowrap}
+.stab.on{color:var(--cyan);border-bottom-color:var(--cyan)}
+.stab:hover:not(.on){color:var(--text2)}
+.spane{display:none;flex:1;overflow-y:auto;padding:0 7px 10px}
+.spane.on{display:block}
+.spane::-webkit-scrollbar{width:2px}
+.spane::-webkit-scrollbar-thumb{background:var(--border2);border-radius:1px}
+
+/* Search */
+.sbox{margin:9px 0 5px;position:relative}
+.sbox input{width:100%;padding:7px 10px 7px 29px;background:var(--glass);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'JetBrains Mono',monospace;outline:none;transition:border-color .2s}
+.sbox input::placeholder{color:var(--text3)}
+.sbox input:focus{border-color:var(--border2);background:var(--glass2)}
+.sico{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:12px;pointer-events:none}
+.syslbl{font-family:'JetBrains Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);padding:11px 7px 4px;display:flex;align-items:center;gap:5px}
+.syslbl::after{content:'';flex:1;height:.5px;background:var(--border)}
+.oitem{display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:pointer;transition:all .15s;margin-bottom:1px;border:.5px solid transparent}
+.oitem:hover{background:var(--glass);border-color:var(--border)}
+.oitem.on{background:rgba(0,245,255,.07);border-color:rgba(0,245,255,.2)}
+.oico{width:29px;height:29px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;border:.5px solid var(--border)}
+.onm{font-size:11.5px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.osys{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--text3);text-transform:uppercase}
+.obadge{font-family:'JetBrains Mono',monospace;font-size:7.5px;padding:2px 5px;border-radius:3px;flex-shrink:0;white-space:nowrap}
+
+/* Anatomy list */
+.albl{font-family:'JetBrains Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);padding:10px 7px 4px;display:flex;align-items:center;gap:5px}
+.albl::after{content:'';flex:1;height:.5px;background:var(--border)}
+.aitem{display:flex;align-items:flex-start;gap:9px;padding:7px;border-radius:6px;cursor:pointer;transition:all .14s;border:.5px solid transparent;margin-bottom:1px}
+.aitem:hover{background:var(--glass);border-color:var(--border)}
+.adot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0;transition:box-shadow .2s}
+.aitem:hover .adot{box-shadow:0 0 8px currentColor}
+.anm{font-size:11.5px;font-weight:500;color:var(--text)}
+.adsc{font-size:10px;color:var(--text3);margin-top:1px;line-height:1.35}
+
+/* Notes */
+.nitem{display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:6px;cursor:pointer;border:.5px solid transparent;margin-bottom:4px;transition:all .14s}
+.nitem:hover{background:var(--glass);border-color:var(--border)}
+.ndot{width:7px;height:7px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.ntxt{font-size:11px;color:var(--text2);line-height:1.4;flex:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.nnum{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text3)}
+.ndel{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:0 2px;transition:color .15s;flex-shrink:0;line-height:1}
+.ndel:hover{color:var(--pink)}
+.empty{text-align:center;padding:36px 16px;color:var(--text3);font-size:10.5px;line-height:1.9;font-family:'JetBrains Mono',monospace}
+
+/* Controls */
+.cgrp{margin-bottom:15px;padding-top:8px}
+.cgrptitle{font-family:'JetBrains Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);margin-bottom:9px;padding-bottom:5px;border-bottom:.5px solid var(--border)}
+.srow{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.snm{font-size:11px;color:var(--text2);width:70px;flex-shrink:0}
+.sval{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);width:30px;text-align:right}
+input[type=range].hr{-webkit-appearance:none;height:3px;background:var(--border2);border-radius:2px;outline:none;cursor:pointer}
+input[type=range].hr::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px rgba(0,245,255,.5);cursor:pointer}
+.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:5px}
+.vp{padding:7px;border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:8.5px;text-align:center;cursor:pointer;transition:all .2s;background:var(--glass);border:.5px solid var(--border);color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.vp:hover{border-color:var(--border2);color:var(--text2)}
+.vp.on{border-color:var(--cyan);color:var(--cyan);background:rgba(0,245,255,.08)}
+
+/* nbadge */
+.nbadge{display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;border-radius:8px;background:var(--cyan);color:var(--bg);font-family:'JetBrains Mono',monospace;font-size:7.5px;font-weight:700;padding:0 3px;margin-left:3px}
+
+/* ── VIEWPORT ── */
+#vp{
+  flex:1;position:relative;overflow:hidden;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 42%,#010C1A 0%,#020408 65%),
+    radial-gradient(ellipse 100% 100% at 50% 50%,#020408,#020408);
+}
+
+/* HOLO RINGS */
+.hring{position:absolute;border-radius:50%;border:.5px solid;pointer-events:none;animation:rpulse 4s ease-in-out infinite}
+@keyframes rpulse{0%,100%{opacity:.1;transform:translate(-50%,-50%) scale(1)}50%{opacity:.3;transform:translate(-50%,-50%) scale(1.025)}}
+
+/* HOLO TABLE */
+#htable{
+  position:absolute;bottom:57px;left:50%;transform:translateX(-50%);
+  width:min(680px,90%);height:44px;border-radius:50%;
+  border-top:1px solid rgba(0,200,255,.3);
+  box-shadow:0 0 60px rgba(0,200,255,.1),0 0 120px rgba(0,100,255,.06),inset 0 1px 0 rgba(0,245,255,.2);
+  pointer-events:none;
+  background:linear-gradient(180deg,rgba(0,200,255,.04),transparent);
+}
+#htable::before{
+  content:'';position:absolute;top:-1px;left:25%;right:25%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,245,255,.9),transparent);
+  animation:scan 4.5s ease-in-out infinite;
+}
+@keyframes scan{0%,100%{left:10%;right:72%}50%{left:72%;right:10%}}
+
+/* ── SKETCHFAB IFRAME CONTAINER ── */
+#sfWrap{
+  position:absolute;
+  top:52px; /* below modes bar */
+  left:50%;transform:translateX(-50%);
+  width:min(720px,100%);
+  bottom:57px; /* above bottom bar */
+  z-index:10;
+  display:flex;align-items:center;justify-content:center;
+}
+#sfFrame{
+  width:100%;height:100%;
+  border:none;border-radius:12px;
+  background:transparent;
+  box-shadow:
+    0 0 0 1px rgba(0,245,255,.12),
+    0 0 40px rgba(0,200,255,.08),
+    0 0 80px rgba(0,100,255,.05);
+}
+/* Holographic vignette overlay on top of iframe */
+#sfVignette{
+  position:absolute;inset:0;pointer-events:none;border-radius:12px;
+  background:
+    radial-gradient(ellipse 100% 10% at 50% 0%,rgba(0,200,255,.07),transparent 70%),
+    radial-gradient(ellipse 100% 10% at 50% 100%,rgba(0,200,255,.07),transparent 70%),
+    radial-gradient(ellipse 8% 100% at 0% 50%,rgba(0,200,255,.05),transparent 70%),
+    radial-gradient(ellipse 8% 100% at 100% 50%,rgba(0,200,255,.05),transparent 70%);
+  z-index:11;
+}
+/* Animated holo scan over iframe */
+#sfScan{
+  position:absolute;inset:0;pointer-events:none;border-radius:12px;
+  background:linear-gradient(180deg,transparent 0%,rgba(0,245,255,.03) 50%,transparent 100%);
+  background-size:100% 4px;
+  animation:sfscroll 3s linear infinite;
+  z-index:12;opacity:.6;
+}
+@keyframes sfscroll{0%{background-position:0 -100%}100%{background-position:0 200%}}
+/* Corner decorations */
+.hcorner{position:absolute;width:24px;height:24px;pointer-events:none;z-index:13}
+.hcorner.tl{top:0;left:0;border-top:1.5px solid var(--cyan);border-left:1.5px solid var(--cyan);border-radius:6px 0 0 0}
+.hcorner.tr{top:0;right:0;border-top:1.5px solid var(--cyan);border-right:1.5px solid var(--cyan);border-radius:0 6px 0 0}
+.hcorner.bl{bottom:0;left:0;border-bottom:1.5px solid var(--cyan);border-left:1.5px solid var(--cyan);border-radius:0 0 0 6px}
+.hcorner.br{bottom:0;right:0;border-bottom:1.5px solid var(--cyan);border-right:1.5px solid var(--cyan);border-radius:0 0 6px 0}
+/* Data readouts */
+.sf-readout{
+  position:absolute;font-family:'JetBrains Mono',monospace;font-size:8.5px;
+  color:var(--cyan);opacity:.65;pointer-events:none;z-index:14;
+  background:rgba(0,5,12,.7);padding:3px 7px;border-radius:3px;
+  border:.5px solid rgba(0,245,255,.15);letter-spacing:.5px;
+}
+
+/* ── MODES BAR ── */
+#mbar{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  display:flex;gap:2px;background:rgba(2,4,8,.92);
+  border:.5px solid var(--border);border-radius:8px;padding:4px;
+  backdrop-filter:blur(20px);z-index:40;
+}
+.mbttn{padding:4px 11px;border-radius:5px;cursor:pointer;transition:all .2s;font-family:'JetBrains Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);background:none;border:none;white-space:nowrap}
+.mbttn:hover{color:var(--text2);background:var(--glass)}
+.mbttn.on{color:var(--cyan);background:rgba(0,245,255,.1);box-shadow:0 0 10px rgba(0,245,255,.08)}
+
+/* ── TOOLBAR ── */
+#tb{
+  position:absolute;top:50%;right:12px;transform:translateY(-50%);
+  display:flex;flex-direction:column;gap:3px;
+  background:rgba(2,4,8,.88);border:.5px solid var(--border);
+  border-radius:10px;padding:5px;backdrop-filter:blur(20px);z-index:40;
+}
+.tbttn{
+  width:33px;height:33px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .14s;border:.5px solid transparent;
+  background:none;color:var(--text3);font-size:14px;position:relative;
+}
+.tbttn:hover{background:var(--glass);border-color:var(--border);color:var(--text2)}
+.tbttn.on{background:rgba(0,245,255,.12);border-color:rgba(0,245,255,.3);color:var(--cyan)}
+.tsep{height:.5px;background:var(--border);margin:2px 0}
+.ttip{position:absolute;right:41px;top:50%;transform:translateY(-50%);background:var(--panel);border:.5px solid var(--border2);border-radius:5px;padding:4px 8px;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--text);opacity:0;pointer-events:none;transition:opacity .14s;text-transform:uppercase;letter-spacing:.5px}
+.tbttn:hover .ttip{opacity:1}
+
+/* ── BOTTOM BAR ── */
+#bbar{
+  position:absolute;bottom:0;left:0;right:0;height:52px;
+  border-top:.5px solid var(--border);
+  background:linear-gradient(0deg,rgba(2,4,8,.98),rgba(4,9,18,.94));
+  backdrop-filter:blur(22px);
+  display:flex;align-items:center;padding:0 13px;gap:9px;z-index:40;
+}
+.bc{display:flex;align-items:center;gap:7px}
+.blbl{font-family:'JetBrains Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);white-space:nowrap}
+.bsep{width:.5px;height:26px;background:var(--border);margin:0 1px;flex-shrink:0}
+.hbtn{padding:5px 11px;border-radius:5px;border:.5px solid var(--border2);background:var(--glass);color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:8.5px;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.hbtn:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,245,255,.07)}
+.hbtn.prim{border-color:rgba(0,245,255,.4);background:rgba(0,245,255,.1);color:var(--cyan)}
+.bpm-num{font-family:'Syne',sans-serif;font-size:19px;font-weight:700;color:var(--cyan);line-height:1}
+.bpm-lbl{font-family:'JetBrains Mono',monospace;font-size:7.5px;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+#ecgC{width:118px;height:33px}
+
+/* ── FLOATING PANELS ── */
+.fpan{
+  position:absolute;background:rgba(2,6,15,.95);
+  border:.5px solid var(--border);border-radius:12px;
+  backdrop-filter:blur(24px);z-index:60;
+  box-shadow:0 4px 30px rgba(0,0,0,.5),0 0 20px rgba(0,245,255,.04);
+}
+.phdr{padding:11px 13px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.phdr h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:var(--cyan)}
+.pcls{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;color:var(--text3);transition:all .14s;background:none;border:none}
+.pcls:hover{background:var(--glass2);color:var(--text)}
+.pbdy{padding:13px;overflow-y:auto;max-height:calc(100vh - 200px)}
+.pbdy::-webkit-scrollbar{width:2px}
+.pbdy::-webkit-scrollbar-thumb{background:var(--border2);border-radius:1px}
+.ifield{margin-bottom:12px}
+.ikey{font-family:'JetBrains Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:4px}
+.ival{font-size:11.5px;color:var(--text);line-height:1.5}
+.ival.hl{color:var(--cyan);font-weight:500}
+.idiv{height:.5px;background:var(--border);margin:11px 0}
+.tlist{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.tag{padding:2px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:7.5px;text-transform:uppercase;letter-spacing:.5px}
+.tag.r{background:rgba(255,0,110,.1);border:.5px solid rgba(255,0,110,.25);color:var(--pink)}
+.tag.c{background:rgba(0,245,255,.08);border:.5px solid rgba(0,245,255,.2);color:var(--cyan)}
+.tag.a{background:rgba(255,184,0,.08);border:.5px solid rgba(255,184,0,.2);color:var(--amber)}
+.tag.g{background:rgba(0,255,136,.08);border:.5px solid rgba(0,255,136,.2);color:var(--green)}
+
+/* ── ANNOTATION MODAL ── */
+#annMod{
+  position:absolute;z-index:90;background:rgba(2,6,16,.97);
+  border:.5px solid var(--border2);border-radius:12px;padding:15px;
+  width:248px;display:none;backdrop-filter:blur(24px);
+  box-shadow:0 8px 40px rgba(0,0,0,.6),0 0 30px rgba(0,200,255,.04);
+}
+#annMod.on{display:block;animation:popIn .2s ease}
+@keyframes popIn{from{opacity:0;transform:scale(.93)}to{opacity:1;transform:scale(1)}}
+#annMod h4{font-family:'Syne',sans-serif;font-size:11.5px;font-weight:700;color:var(--cyan);margin-bottom:11px;text-transform:uppercase;letter-spacing:1px}
+.cpick{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap}
+.copt{padding:3px 8px;border-radius:4px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:7.5px;text-transform:uppercase;letter-spacing:.5px;border:.5px solid;transition:all .14s;opacity:.42}
+.copt.on{opacity:1}
+#annTxt{width:100%;height:65px;background:var(--glass);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Inter',sans-serif;padding:8px;resize:none;outline:none;margin-bottom:9px;transition:border-color .14s}
+#annTxt:focus{border-color:var(--border2)}
+.macts{display:flex;gap:5px}
+.mbtn{flex:1;padding:6px;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:8.5px;text-transform:uppercase;letter-spacing:.5px;border:.5px solid var(--border);background:var(--glass);color:var(--text2);transition:all .14s}
+.mbtn.sv{background:rgba(0,245,255,.1);border-color:rgba(0,245,255,.3);color:var(--cyan)}
+
+/* ── ANNOTATION PINS ── */
+#annLayer{position:absolute;inset:0;pointer-events:none;z-index:35;overflow:hidden}
+.apin{position:absolute;pointer-events:all;transform:translate(-50%,-100%);transition:opacity .2s}
+.abubble{background:rgba(1,6,15,.94);border:.5px solid;border-radius:8px;padding:7px 10px;min-width:125px;max-width:185px;font-size:10.5px;color:var(--text);line-height:1.4;cursor:pointer;transition:all .2s}
+.abubble:hover{border-width:1px}
+.acat{font-family:'JetBrains Mono',monospace;font-size:7.5px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.aline{width:1px;height:15px;margin:0 auto}
+.adott{width:9px;height:9px;border-radius:50%;margin:0 auto;border:1.5px solid rgba(255,255,255,.3)}
+
+/* ── QUIZ ── */
+.qq{font-family:'Syne',sans-serif;font-size:13.5px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:13px}
+.qopts{display:flex;flex-direction:column;gap:4px}
+.qopt{padding:8px 11px;border-radius:6px;cursor:pointer;border:.5px solid var(--border);background:var(--glass);font-size:11.5px;color:var(--text2);transition:all .14s}
+.qopt:hover{border-color:var(--border2);color:var(--text);background:var(--glass2)}
+.qopt.ok{border-color:var(--green);background:rgba(0,255,136,.08);color:var(--green)}
+.qopt.fail{border-color:var(--pink);background:rgba(255,0,110,.08);color:var(--pink)}
+.qfb{margin-top:11px;padding:10px;border-radius:6px;font-size:10.5px;line-height:1.5;display:none}
+.qfb.sh{display:block}
+.qfb.ok{background:rgba(0,255,136,.07);border:.5px solid rgba(0,255,136,.2);color:var(--green)}
+.qfb.fail{background:rgba(255,0,110,.07);border:.5px solid rgba(255,0,110,.2);color:var(--pink)}
+.scnum{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--amber);line-height:1}
+.sclbl{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--text3);text-transform:uppercase}
+
+/* ── SECTION OVERLAYS ── */
+.secpan{position:absolute;inset:0;background:rgba(2,4,8,.97);z-index:150;display:none;flex-direction:column;align-items:center;justify-content:center;gap:22px;animation:fadeIn .3s ease}
+.secpan.on{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.sectitle{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;color:var(--cyan);letter-spacing:-1px}
+.secsub{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:2px}
+.secgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:680px;width:100%;padding:0 22px}
+.scard{background:var(--glass);border:.5px solid var(--border);border-radius:12px;padding:18px;text-align:center;cursor:pointer;transition:all .2s}
+.scard:hover{border-color:var(--border2);background:var(--glass2);transform:translateY(-2px)}
+.scard .sico{font-size:26px;margin-bottom:9px}
+.scard .stit{font-family:'Syne',sans-serif;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:5px}
+.scard .sdsc{font-size:10.5px;color:var(--text3);line-height:1.5}
+.backbtn{padding:8px 18px;border-radius:6px;border:.5px solid var(--border2);background:var(--glass);color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:9.5px;cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:1px}
+.backbtn:hover{border-color:var(--cyan);color:var(--cyan)}
+
+/* ── TOAST ── */
+.toast{position:fixed;top:66px;right:17px;z-index:500;background:rgba(2,6,15,.97);border:.5px solid rgba(0,245,255,.28);border-radius:10px;padding:11px 15px;max-width:268px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text2);box-shadow:0 4px 22px rgba(0,0,0,.5),0 0 18px rgba(0,245,255,.04);animation:toastIn .25s ease;pointer-events:none}
+@keyframes toastIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+.tttl{color:var(--cyan);font-size:11.5px;font-weight:600;margin-bottom:3px;font-family:'Syne',sans-serif}
+
+/* ── LOADING ── */
+#loader{position:fixed;inset:0;background:var(--bg);z-index:9995;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;transition:opacity .6s}
+.llogo{font-family:'Syne',sans-serif;font-size:42px;font-weight:800;color:var(--cyan);letter-spacing:-1.5px}
+.lsub{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:2px}
+.lbar{width:210px;height:2px;background:var(--border);border-radius:1px;overflow:hidden}
+.lfill{height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:1px;width:0;transition:width .08s;box-shadow:0 0 10px var(--cyan)}
+.lpct{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text3)}
+.lstep{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text3);min-height:16px;letter-spacing:.5px}
+</style>
+</head>
+<body>
+
+<div id="cur"></div><div id="curR"></div>
+<div id="scan"></div><div id="grid"></div><div id="ptcl"></div>
+
+<!-- LOADER -->
+<div id="loader">
+  <div style="position:relative">
+    <div class="llogo">HoloMed 3D</div>
+    <div style="position:absolute;top:-10px;right:-20px;width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 14px var(--cyan);animation:blink 1.2s ease infinite"></div>
+  </div>
+  <div class="lsub">Inicializando Mesa Holográfica Médica</div>
+  <div class="lbar"><div class="lfill" id="lf"></div></div>
+  <div class="lpct" id="lpct">0%</div>
+  <div class="lstep" id="lstep">Carregando WebGL...</div>
+</div>
+
+<!-- APP -->
+<div id="app" style="opacity:0;transition:opacity .7s">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <div class="logo">
+      <div class="logo-icon">⬡</div>
+      HoloMed 3D
+      <sub>// Mesa Holográfica v2.1</sub>
+    </div>
+    <div class="nav-tabs">
+      <button class="ntab on" onclick="showSec('lab')">◈ Lab 3D</button>
+      <button class="ntab" onclick="showSec('library')">◫ Biblioteca</button>
+      <button class="ntab" onclick="showSec('quiz')">◉ Quiz</button>
+      <button class="ntab" onclick="showSec('collab')">◎ Colaboração</button>
+    </div>
+    <div class="tr">
+      <div class="chip"><div class="live-dot"></div>WebGL Ativo</div>
+      <div class="chip" id="mchip">⬡ Anatômico</div>
+      <div class="chip" id="annChip" style="display:none;cursor:pointer" onclick="setTool('annotate')">✎ Modo Anotação</div>
+      <div class="uchip">
+        <div class="uav">DR</div>
+        <span class="uname">Dr. Residente</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+
+    <!-- SIDEBAR -->
+    <div id="sb">
+      <div class="stabs">
+        <div class="stab on" onclick="sstab('organs',this)">Órgãos</div>
+        <div class="stab" onclick="sstab('anatomy',this)">Estruturas</div>
+        <div class="stab" onclick="sstab('notes',this)" id="stab-notes">Notas</div>
+        <div class="stab" onclick="sstab('controls',this)">Vista</div>
+      </div>
+
+      <!-- ORGANS -->
+      <div class="spane on" id="sp-organs">
+        <div class="sbox">
+          <span class="sico">⌕</span>
+          <input type="text" placeholder="Buscar estrutura..." id="srch" oninput="filterO(this.value)">
+        </div>
+        <div id="olist"></div>
+      </div>
+
+      <!-- ANATOMY -->
+      <div class="spane" id="sp-anatomy">
+        <div id="alist"></div>
+      </div>
+
+      <!-- NOTES -->
+      <div class="spane" id="sp-notes">
+        <div id="nlist"></div>
+      </div>
+
+      <!-- CONTROLS -->
+      <div class="spane" id="sp-controls">
+        <div class="cgrp">
+          <div class="cgrptitle">Perspectivas Rápidas</div>
+          <div class="vgrid">
+            <div class="vp" onclick="setViewP('front')">Frontal</div>
+            <div class="vp" onclick="setViewP('back')">Posterior</div>
+            <div class="vp" onclick="setViewP('top')">Superior</div>
+            <div class="vp" onclick="setViewP('left')">Lateral E.</div>
+            <div class="vp" onclick="setViewP('right')">Lateral D.</div>
+            <div class="vp" onclick="setViewP('iso')">Isométrico</div>
+          </div>
+        </div>
+        <div class="cgrp">
+          <div class="cgrptitle">Modelo Sketchfab</div>
+          <div style="font-size:10.5px;color:var(--text3);line-height:1.6;margin-bottom:10px">
+            Interaja diretamente com o modelo 3D do coração. Use o mouse/touch para <strong style="color:var(--text2)">girar, dar zoom e navegar</strong> pelo modelo hiper-realista.
+          </div>
+          <button class="hbtn prim" onclick="document.getElementById('sfFrame').src=document.getElementById('sfFrame').src" style="width:100%;padding:8px;margin-bottom:5px">↺ Recarregar Modelo</button>
+          <button class="hbtn" onclick="openFullSF()" style="width:100%;padding:8px">⛶ Ver em Tela Cheia</button>
+        </div>
+        <div class="cgrp">
+          <div class="cgrptitle">Pulsação Cardíaca</div>
+          <div class="srow">
+            <span class="snm">BPM</span>
+            <input type="range" class="hr" style="flex:1" min="30" max="180" value="72" id="bpmR" oninput="setBPM(this.value)">
+            <span class="sval" id="bpmV">72</span>
+          </div>
+          <div class="srow" style="justify-content:space-between">
+            <button class="hbtn" onclick="toggleBeat()" id="beatB" style="flex:1">⏸ Parar</button>
+          </div>
+        </div>
+      </div>
+    </div><!-- /sb -->
+
+    <!-- VIEWPORT -->
+    <div id="vp">
+
+      <!-- HOLO RINGS (behind iframe) -->
+      <div class="hring" style="width:580px;height:290px;border-color:rgba(0,200,255,.06);top:55%;left:50%;transform:translate(-50%,-50%);z-index:2"></div>
+      <div class="hring" style="width:430px;height:215px;border-color:rgba(0,200,255,.09);top:55%;left:50%;transform:translate(-50%,-50%);animation-delay:-2s;z-index:2"></div>
+      <div class="hring" style="width:290px;height:145px;border-color:rgba(0,200,255,.14);top:55%;left:50%;transform:translate(-50%,-50%);animation-delay:-1s;z-index:2"></div>
+
+      <!-- MODES BAR -->
+      <div id="mbar">
+        <button class="mbttn on" onclick="setMode('realistic',this)">Realístico</button>
+        <button class="mbttn" onclick="setMode('educational',this)">Educacional</button>
+        <button class="mbttn" onclick="setMode('vascular',this)">Vascular</button>
+        <button class="mbttn" onclick="setMode('xray',this)">Raio-X</button>
+        <button class="mbttn" onclick="setMode('exploded',this)">Desmontagem</button>
+      </div>
+
+      <!-- SKETCHFAB MODEL -->
+      <div id="sfWrap">
+        <iframe id="sfFrame"
+          title="Coração Humano — HoloMed 3D"
+          frameborder="0"
+          allowfullscreen
+          mozallowfullscreen="true"
+          webkitallowfullscreen="true"
+          allow="autoplay; fullscreen; xr-spatial-tracking"
+          xr-spatial-tracking
+          execution-while-out-of-viewport
+          execution-while-not-rendered
+          web-share
+          class="sfFrame"
+          src="https://sketchfab.com/models/ac8f37578cd84c3bb4417234cbafb3a2/embed?autostart=1&transparent=1&ui_theme=dark&ui_color=00F5FF&ui_watermark=0&ui_infos=0&ui_controls=1&ui_stop=0&preload=1&dnt=0">
+        </iframe>
+        <!-- Holo overlays -->
+        <div id="sfVignette"></div>
+        <div id="sfScan"></div>
+        <div class="hcorner tl"></div>
+        <div class="hcorner tr"></div>
+        <div class="hcorner bl"></div>
+        <div class="hcorner br"></div>
+        <!-- Data readouts -->
+        <div class="sf-readout" style="top:12px;left:14px">CORACAO // HOMO SAPIENS</div>
+        <div class="sf-readout" style="top:12px;right:14px" id="rdBpm">BPM: 72 // NORMAL</div>
+        <div class="sf-readout" style="bottom:12px;left:14px">4 CÂMARAS // 2 ÁTRIOS // 2 VENTRÍCULOS</div>
+        <div class="sf-readout" style="bottom:12px;right:14px" id="rdMode">MODO: ANATÔMICO</div>
+      </div>
+
+      <!-- HOLO TABLE -->
+      <div id="htable"></div>
+
+      <!-- ANNOTATION LAYER (over iframe) -->
+      <div id="annLayer"></div>
+
+      <!-- INFO PANEL -->
+      <div class="fpan" id="infoPan" style="top:55px;left:12px;width:276px;display:none">
+        <div class="phdr">
+          <h3 id="iPanTitle">—</h3>
+          <button class="pcls" onclick="document.getElementById('infoPan').style.display='none'">✕</button>
+        </div>
+        <div class="pbdy" id="iPanBody"></div>
+      </div>
+
+      <!-- QUIZ PANEL -->
+      <div class="fpan" id="quizPan" style="top:55px;right:52px;width:284px;display:none">
+        <div class="phdr">
+          <h3>◉ Quiz Anatômico</h3>
+          <button class="pcls" onclick="document.getElementById('quizPan').style.display='none'">✕</button>
+        </div>
+        <div class="pbdy" id="qBody"></div>
+      </div>
+
+      <!-- ANNOTATION MODAL -->
+      <div id="annMod">
+        <h4>✎ Nova Anotação</h4>
+        <div class="cpick" id="cpick"></div>
+        <textarea id="annTxt" placeholder="Descreva esta estrutura anatômica..."></textarea>
+        <div class="macts">
+          <button class="mbtn" onclick="closeAnn()">Cancelar</button>
+          <button class="mbtn sv" onclick="saveAnn()">✓ Salvar</button>
+        </div>
+      </div>
+
+      <!-- TOOLBAR -->
+      <div id="tb">
+        <button class="tbttn on" id="tbR" onclick="setTool('rotate')" title="Navegar">↺<span class="ttip">Navegar</span></button>
+        <button class="tbttn" id="tbA" onclick="setTool('annotate')" title="Anotar">✎<span class="ttip">Anotar</span></button>
+        <div class="tsep"></div>
+        <button class="tbttn" onclick="focusS('aorta')">↯<span class="ttip">Aorta</span></button>
+        <button class="tbttn" onclick="focusS('lv')">♥<span class="ttip">V. Esquerdo</span></button>
+        <button class="tbttn" onclick="focusS('lca')">⊕<span class="ttip">Coronária</span></button>
+        <div class="tsep"></div>
+        <button class="tbttn" onclick="document.getElementById('sb').classList.toggle('off')">⇤<span class="ttip">Sidebar</span></button>
+        <button class="tbttn" onclick="openFullSF()">⛶<span class="ttip">Tela Cheia</span></button>
+      </div>
+
+      <!-- BOTTOM BAR -->
+      <div id="bbar">
+        <div class="bc">
+          <span class="blbl">BPM</span>
+          <input type="range" class="hr" style="width:76px" min="30" max="180" value="72" id="bpmR2" oninput="setBPM(this.value)">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text3);width:22px" id="bpmD">72</span>
+        </div>
+        <div class="bsep"></div>
+        <button class="hbtn prim" onclick="toggleBeat()" id="beatB2">⏸ Parar Batimento</button>
+        <button class="hbtn" onclick="openQuiz()">◉ Quiz</button>
+        <button class="hbtn" onclick="focusS('aorta')">↯ Aorta</button>
+        <button class="hbtn" onclick="focusS('lv')">⊙ V. Esq.</button>
+        <button class="hbtn" onclick="focusS('mv')">◎ Válvula Mitral</button>
+        <button class="hbtn" onclick="setTool('annotate');showToast('Modo Anotação','Clique sobre o modelo para adicionar anotações ancoradas.',2800)">✎ Anotar</button>
+        <div class="bsep"></div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:9px">
+          <div>
+            <div class="bpm-num" id="bpmNum">72</div>
+            <div class="bpm-lbl">BPM</div>
+          </div>
+          <canvas id="ecgC" width="118" height="33"></canvas>
+        </div>
+      </div>
+
+      <!-- SECTION PANELS -->
+      <div class="secpan" id="sec-library">
+        <div class="sectitle">Biblioteca Anatômica</div>
+        <div class="secsub">HoloMed 3D — Sistemas do Corpo Humano</div>
+        <div class="secgrid" id="libGrid"></div>
+        <button class="backbtn" onclick="closeSec('library')">← Voltar ao Lab 3D</button>
+      </div>
+
+      <div class="secpan" id="sec-collab">
+        <div class="sectitle">Colaboração</div>
+        <div class="secsub">Sessões educativas em tempo real</div>
+        <div class="secgrid">
+          <div class="scard" onclick="showToast('Sessão Criada','Link copiado! Compartilhe com seus colegas para estudo colaborativo.',3000)">
+            <div class="sico">📡</div><div class="stit">Nova Sessão</div>
+            <div class="sdsc">Crie uma sala colaborativa para múltiplos usuários simultâneos.</div>
+          </div>
+          <div class="scard" onclick="showToast('Modo Professor','Ativo! Os alunos agora seguem sua visualização em tempo real.',3000)">
+            <div class="sico">🎓</div><div class="stit">Modo Professor</div>
+            <div class="sdsc">Controle a visualização de todos os alunos da turma remotamente.</div>
+          </div>
+          <div class="scard" onclick="showToast('Exportar','Gerando PDF com todas as anotações e capturas da sessão...',2500)">
+            <div class="sico">📤</div><div class="stit">Exportar Sessão</div>
+            <div class="sdsc">Exporte anotações, capturas e histórico de estudo em PDF.</div>
+          </div>
+          <div class="scard" onclick="showToast('Apresentação','Modo apresentação. Pressione F11 para tela cheia total.',3000)">
+            <div class="sico">🖥</div><div class="stit">Apresentação</div>
+            <div class="sdsc">Modo fullscreen otimizado para projetores e salas de aula.</div>
+          </div>
+          <div class="scard" onclick="showToast('Modo Aluno','Digite o código de sala do professor para entrar.',3000)">
+            <div class="sico">📚</div><div class="stit">Modo Aluno</div>
+            <div class="sdsc">Entre em uma sessão ao vivo do professor com código de acesso.</div>
+          </div>
+          <div class="scard" onclick="showToast('Histórico','12 sessões concluídas · 3h42min totais · 94% aproveitamento.',4000)">
+            <div class="sico">📊</div><div class="stit">Histórico</div>
+            <div class="sdsc">Visualize seu progresso de aprendizado e sessões anteriores.</div>
+          </div>
+        </div>
+        <button class="backbtn" onclick="closeSec('collab')">← Voltar ao Lab 3D</button>
+      </div>
+
+    </div><!-- /vp -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// HOLOMED 3D — FULL ENGINE
+// ══════════════════════════════════════════════════════════════════════
+
+// ─── CURSOR ──────────────────────────────────────────────────────────
+const C=document.getElementById('cur'),CR=document.getElementById('curR');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{
+  mx=e.clientX;my=e.clientY;
+  C.style.left=mx+'px';C.style.top=my+'px';
+});
+(function aR(){rx+=(mx-rx)*.12;ry+=(my-ry)*.12;CR.style.left=rx+'px';CR.style.top=ry+'px';requestAnimationFrame(aR)})();
+
+// ─── PARTICLES ───────────────────────────────────────────────────────
+(function(){
+  const cont=document.getElementById('ptcl');
+  const cols=['rgba(0,245,255,','rgba(0,100,255,','rgba(0,200,170,','rgba(0,255,136,'];
+  for(let i=0;i<45;i++){
+    const d=document.createElement('div');
+    const sz=Math.random()*2.2+.7;
+    Object.assign(d.style,{
+      width:sz+'px',height:sz+'px',
+      background:cols[i%cols.length]+(Math.random()*.55+.1)+')',
+      left:Math.random()*100+'%',
+      animationDuration:(Math.random()*24+14)+'s',
+      animationDelay:(-Math.random()*24)+'s',
+    });
+    d.className='pt';cont.appendChild(d);
+  }
+})();
+
+// ─── LOADER ──────────────────────────────────────────────────────────
+const STEPS=['Carregando WebGL...','Inicializando Three.js...','Carregando modelo Sketchfab...','Processando anatomia cardíaca...','Calibrando holografia...','Sistema pronto ✓'];
+let lp=0,lsi=0;
+const li=setInterval(()=>{
+  lp+=Math.random()*7+1.5;if(lp>=100){lp=100;clearInterval(li);setTimeout(finishLoad,450)}
+  document.getElementById('lf').style.width=lp+'%';
+  document.getElementById('lpct').textContent=Math.floor(lp)+'%';
+  const si=Math.min(Math.floor(lp/18),STEPS.length-1);
+  if(si!==lsi){lsi=si;document.getElementById('lstep').textContent=STEPS[si]}
+},72);
+
+function finishLoad(){
+  const ls=document.getElementById('loader');ls.style.opacity='0';
+  setTimeout(()=>ls.style.display='none',600);
+  document.getElementById('app').style.opacity='1';
+  buildOList();buildAList();buildCpick();buildLibGrid();updateNList();startECG();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════════════════
+const ORGANS=[
+  {id:'heart',name:'Coração',sys:'Cardiovascular',ico:'❤',col:'#FF1744',
+   desc:'Órgão muscular central do sistema circulatório com quatro câmaras. Realiza ciclos de sístole e diástole a uma frequência de 60-100 bpm em repouso, bombeando sangue por toda a circulação sistêmica e pulmonar.',
+   func:'Bombeamento de sangue oxigenado para a circulação sistêmica e sangue desoxigenado para a circulação pulmonar.',
+   cur:'O coração bate ~100.000 vezes/dia, bombeando aprox. 7.000L de sangue. Em exercício intenso, o débito cardíaco pode chegar a 25L/min.',
+   dis:['Infarto do Miocárdio','Insuficiência Cardíaca','Arritmias','DAC','Cardiopatia Congênita'],badge:'3D ATIVO',bc:'c'},
+  {id:'brain',name:'Cérebro',sys:'Sistema Nervoso',ico:'🧠',col:'#E91E63',
+   desc:'Centro de controle do sistema nervoso central, dividido em hemisférios, lobos e estruturas subcorticais.',
+   func:'Cognição, controle motor, memória, linguagem, regulação autonômica.',
+   cur:'Contém ~86 bilhões de neurônios com trilhões de conexões sinápticas. Consome 20% da energia corporal.',
+   dis:['AVC','Tumor Cerebral','Alzheimer','Parkinson','Epilepsia'],badge:'Em Breve',bc:'a'},
+  {id:'lungs',name:'Pulmões',sys:'Respiratório',ico:'🫁',col:'#2196F3',
+   desc:'Par de órgãos esponjosos formados por ~300 milhões de alvéolos responsáveis pela troca gasosa.',
+   func:'Hematose — captação de O₂ e eliminação de CO₂ na circulação pulmonar.',
+   cur:'A superfície alveolar total equivale a ~70m² — semelhante a uma quadra de tênis.',
+   dis:['Pneumonia','DPOC','Asma','Câncer de Pulmão','Tuberculose'],badge:'Em Breve',bc:'a'},
+  {id:'liver',name:'Fígado',sys:'Digestivo',ico:'🟤',col:'#795548',
+   desc:'Maior glândula do organismo (~1,5kg). Possui mais de 500 funções metabólicas identificadas.',
+   func:'Metabolismo de nutrientes, produção de bile, síntese de proteínas plasmáticas, detoxificação.',
+   cur:'Único órgão capaz de regeneração completa a partir de apenas 25% de seu tecido original.',
+   dis:['Cirrose','Hepatite Viral','Esteatose Hepática','CHC'],badge:'Em Breve',bc:'a'},
+  {id:'kidneys',name:'Rins',sys:'Urinário',ico:'🫘',col:'#FF5722',
+   desc:'Par de órgãos retroperitoneais com ~1 milhão de néfrons cada, responsáveis pela homeostase hídrica.',
+   func:'Filtração glomerular, equilíbrio ácido-base, regulação pressórica, eritropoetina.',
+   cur:'Filtram ~180L de plasma/dia, produzindo 1-2L de urina concentrada.',
+   dis:['IRC','Nefrolitíase','Glomerulonefrite','Síndrome Nefrótica'],badge:'Em Breve',bc:'a'},
+  {id:'spine',name:'Coluna Vertebral',sys:'Musculoesquelético',ico:'🦴',col:'#9E9E9E',
+   desc:'Estrutura axial com 33 vértebras (7C + 12T + 5L + 5S + 4Co) protegendo a medula espinhal.',
+   func:'Suporte estrutural, proteção medular, ancoragem muscular, absorção de impactos.',
+   cur:'Suas curvaturas naturais aumentam a resistência estrutural em ~10x vs. haste reta.',
+   dis:['Hérnia de Disco','Escoliose','Espondilite Anquilosante','Osteoporose'],badge:'Em Breve',bc:'a'},
+  {id:'stomach',name:'Estômago',sys:'Digestivo',ico:'🔵',col:'#FF9800',
+   desc:'Órgão muscular oco do trato digestório, com pH gástrico de 1.5-3.5, entre esôfago e intestino delgado.',
+   func:'Digestão mecânica e química, secreção de HCl e pepsinogênio.',
+   cur:'O revestimento mucoso se renova completamente a cada 3-4 dias para resistir ao ácido.',
+   dis:['Gastrite','Úlcera Péptica','Câncer Gástrico','DRGE'],badge:'Em Breve',bc:'a'},
+  {id:'pancreas',name:'Pâncreas',sys:'Endócrino',ico:'🟡',col:'#FFEB3B',
+   desc:'Glândula mista retroperitoneal com porção exócrina (ácinos) e endócrina (ilhotas de Langerhans).',
+   func:'Insulina/glucagon (endócrino) e enzimas digestivas lipase, amilase, protease (exócrino).',
+   cur:'Produz ~1,5L de suco pancreático/dia rico em NaHCO₃ para neutralizar o quimo ácido.',
+   dis:['Diabetes Mellitus','Pancreatite','Adenocarcinoma Pancreático'],badge:'Em Breve',bc:'a'},
+];
+
+const STRUCTS={
+  lv:{name:'Ventrículo Esquerdo',desc:'Câmara de maior pressão (~120mmHg sistólica) e parede miocárdica mais espessa (~11mm). Bombeia sangue oxigenado através da válvula aórtica para toda a circulação sistêmica. A hipertrofia desta câmara é resposta adaptativa à hipertensão arterial crônica.',func:'Circulação sistêmica',dis:['IAM Anterior','ICC com FE reduzida','Cardiomiopatia Dilatada','HVE']},
+  rv:{name:'Ventrículo Direito',desc:'Câmara de baixa pressão (~25mmHg sistólica) com formato crescêntico envolvendo o VE. Bombeia sangue desoxigenado através da válvula pulmonar para os pulmões. Sua parede é ~3x mais fina que a do VE.',func:'Circulação pulmonar',dis:['Hipertensão Pulmonar','Cor Pulmonale','TEP Maciço','Infarto de VD']},
+  la:{name:'Átrio Esquerdo',desc:'Câmara posterior superior que recebe sangue oxigenado das quatro veias pulmonares. É a câmara mais posterior do coração. A fibrilação atrial frequentemente origina-se em torno dos óstios das veias pulmonares.',func:'Recepção do retorno pulmonar',dis:['Fibrilação Atrial','Estenose Mitral','Trombo Atrial (apêndice)','Flutter Atrial']},
+  ra:{name:'Átrio Direito',desc:'Câmara superior direita que recebe sangue venoso da VCS, VCI e seio coronário. Contém o nó sinoatrial (marcapasso natural) na junção com a VCS e o nó AV no triângulo de Koch.',func:'Recepção venosa sistêmica',dis:['Fibrilação Atrial','Flutter Atrial','Endocardite','Disfunção do Nó SA']},
+  aorta:{name:'Aorta',desc:'Maior artéria do organismo, origina-se no VE atravessando a válvula aórtica. Divide-se em aorta ascendente, arco, torácica descendente e abdominal. As artérias coronárias originam-se nos seios de Valsalva.',func:'Distribuição sistêmica de sangue oxigenado',dis:['Aneurisma de Aorta Abdominal','Dissecção Aórtica','Coarctação da Aorta','Síndrome de Marfan']},
+  pulm:{name:'Artéria Pulmonar',desc:'Único caso de artéria transportando sangue desoxigenado. Origina-se no VD e bifurca-se em artérias pulmonares direita e esquerda. A hipertensão pulmonar aumenta a pós-carga do VD progressivamente.',func:'Circulação pulmonar (sangue venoso)',dis:['Hipertensão Pulmonar Arterial','TEP','Estenose da Artéria Pulmonar','Síndrome de Eisenmenger']},
+  vcs:{name:'Veia Cava Superior',desc:'Drena sangue venoso da metade superior do corpo (cabeça, pescoço, MMSS e tórax) ao átrio direito. Comprimento médio de 7cm, sem válvulas. A SVCS ocorre por compressão tumoral mediastinal.',func:'Retorno venoso superior ao AD',dis:['Síndrome da VCS','Trombose Central','Compressão Tumoral','Cateter Central']},
+  vci:{name:'Veia Cava Inferior',desc:'Maior veia do organismo. Forma-se pela confluência das veias ilíacas comuns em L5 e drena MMII, abdômen e pelve para o AD. Possui válvula de Eustáquio na entrada do AD.',func:'Retorno venoso inferior ao AD',dis:['TVP e Embolia','Síndrome de Budd-Chiari','Filtro de VCI','Trombose por Neoplasia']},
+  mv:{name:'Válvula Mitral',desc:'Válvula AV bicúspide entre AE e VE — a única com apenas dois folhetos no coração adulto (anterior e posterior). Sustentada por cordas tendíneas e músculos papilares (anterolateral e posteromedial). Área normal: 4-6cm².',func:'Controle unidirecional AE→VE',dis:['Prolapso Mitral','Estenose Mitral (febre reumática)','Regurgitação Mitral','Endocardite Infecciosa']},
+  tv:{name:'Válvula Tricúspide',desc:'Válvula AV com três cúspides (anterior, posterior e septal) entre AD e VD. Área normal: 7-9cm². A regurgitação é frequentemente secundária à dilatação do VD por hipertensão pulmonar.',func:'Controle unidirecional AD→VD',dis:['Regurgitação Tricúspide','Estenose Tricúspide','Endocardite (UDIV)','Anomalia de Ebstein']},
+  av:{name:'Válvula Aórtica',desc:'Válvula semilúnar tricúspide (cúspides: direita, esquerda e não-coronariana) na saída do VE. Área normal: 3-4cm². Estenose grave quando <1cm², gerando gradiente médio >40mmHg.',func:'Válvula de saída sistêmica VE→Aorta',dis:['Estenose Aórtica','Regurgitação Aórtica','Bicúspide Congênita (1-2% pop)','Endocardite']},
+  lca:{name:'A. Coronária Esquerda',desc:'Origina-se no seio de Valsalva esquerdo e bifurca-se em LAD (descendente anterior esquerda) e artéria circunflexa. A LAD irriga o septo anterior e ápice — "artéria do widow maker". DAC proximal da DA = grande área de risco.',func:'Nutrição cardíaca esquerda (~70% do miocárdio)',dis:['IAM Anterior (DA)','IAM Lateral (Cx)','DAC de Múltiplos Vasos','Espasmo Coronário']},
+  rca:{name:'A. Coronária Direita',desc:'Origina-se no seio de Valsalva direito. Em dominância direita (70% dos casos), nutre o nó SA, nó AV, VD e parede inferior do VE. IAM inferior frequentemente envolve a RCA.',func:'Nutrição cardíaca direita + sistema de condução',dis:['IAM Inferior','Bloqueio AV por isquemia','DAC de 1 Vaso','Fístula Coronária']},
+};
+
+// ══════════════════════════════════════════════════════════════════════
+// UI
+// ══════════════════════════════════════════════════════════════════════
+let activeOrg='heart';
+
+function buildOList(f=''){
+  const list=document.getElementById('olist');list.innerHTML='';
+  const syss=[...new Set(ORGANS.map(o=>o.sys))];
+  syss.forEach(sys=>{
+    const organs=ORGANS.filter(o=>o.sys===sys&&(!f||o.name.toLowerCase().includes(f.toLowerCase())));
+    if(!organs.length)return;
+    const lbl=document.createElement('div');lbl.className='syslbl';lbl.textContent=sys;list.appendChild(lbl);
+    organs.forEach(o=>{
+      const el=document.createElement('div');
+      el.className='oitem'+(o.id===activeOrg?' on':'');
+      const bcc={c:'rgba(0,245,255,.1)',a:'rgba(255,184,0,.1)'};
+      const bco={c:'rgba(0,245,255,.3)',a:'rgba(255,184,0,.3)'};
+      const btc={c:'var(--cyan)',a:'var(--amber)'};
+      el.innerHTML=`
+        <div class="oico" style="background:${o.col}14;border-color:${o.col}30">${o.ico}</div>
+        <div style="flex:1;min-width:0">
+          <div class="onm">${o.name}</div>
+          <div class="osys">${o.sys}</div>
+        </div>
+        <div class="obadge" style="background:${bcc[o.bc]};border:.5px solid ${bco[o.bc]};color:${btc[o.bc]}">${o.badge}</div>
+      `;
+      el.onclick=()=>selOrg(o.id);
+      list.appendChild(el);
+    });
+  });
+}
+function filterO(v){buildOList(v)}
+
+function selOrg(id){
+  activeOrg=id;buildOList(document.getElementById('srch').value);
+  const o=ORGANS.find(x=>x.id===id);if(!o)return;
+  showInfo(o.name,`
+    <div class="ifield"><div class="ikey">Sistema</div><div class="ival">${o.sys}</div></div>
+    <div class="ifield"><div class="ikey">Descrição Anatômica</div><div class="ival">${o.desc}</div></div>
+    <div class="ifield"><div class="ikey">Função Principal</div><div class="ival hl">${o.func}</div></div>
+    <div class="idiv"></div>
+    <div class="ifield"><div class="ikey">Curiosidade Clínica</div><div class="ival">${o.cur}</div></div>
+    <div class="ifield">
+      <div class="ikey">Patologias Associadas</div>
+      <div class="tlist">${o.dis.map(d=>`<span class="tag r">${d}</span>`).join('')}</div>
+    </div>
+    <div class="ifield"><div class="tlist"><span class="tag c">Anatomia</span><span class="tag g">Fisiologia</span><span class="tag a">Clínica</span></div></div>
+  `);
+  if(id!=='heart')showToast('Em Breve',`Modelo 3D de <strong>${o.name}</strong> estará disponível em breve.`,3000);
+}
+
+function buildAList(){
+  const list=document.getElementById('alist');list.innerHTML='';
+  const groups=[
+    {lbl:'Câmaras',items:[
+      {id:'lv',nm:'Ventrículo Esquerdo',col:'#C0392B',dsc:'Câmara sistêmica principal'},
+      {id:'rv',nm:'Ventrículo Direito',col:'#E74C3C',dsc:'Câmara pulmonar'},
+      {id:'la',nm:'Átrio Esquerdo',col:'#2C3E7A',dsc:'Recepção pulmonar'},
+      {id:'ra',nm:'Átrio Direito',col:'#7744AA',dsc:'Recepção sistêmica'},
+    ]},
+    {lbl:'Grandes Vasos',items:[
+      {id:'aorta',nm:'Aorta',col:'#D4A843',dsc:'Artéria sistêmica principal'},
+      {id:'pulm',nm:'Artéria Pulmonar',col:'#5DADE2',dsc:'Circulação pulmonar'},
+      {id:'vcs',nm:'V. Cava Superior',col:'#A08020',dsc:'Retorno venoso superior'},
+      {id:'vci',nm:'V. Cava Inferior',col:'#8B4513',dsc:'Retorno venoso inferior'},
+    ]},
+    {lbl:'Válvulas',items:[
+      {id:'mv',nm:'Válvula Mitral',col:'#7EC850',dsc:'Bicúspide AE→VE'},
+      {id:'tv',nm:'Válvula Tricúspide',col:'#60C878',dsc:'Tricúspide AD→VD'},
+      {id:'av',nm:'Válvula Aórtica',col:'#F0A500',dsc:'Semilúnar de saída'},
+    ]},
+    {lbl:'Artérias Coronárias',items:[
+      {id:'lca',nm:'Coronária Esquerda',col:'#FF7675',dsc:'LAD + Circunflexa'},
+      {id:'rca',nm:'Coronária Direita',col:'#FD9644',dsc:'Ramo marginal direito'},
+    ]},
+  ];
+  groups.forEach(g=>{
+    const lbl=document.createElement('div');lbl.className='albl';lbl.textContent=g.lbl;list.appendChild(lbl);
+    g.items.forEach(item=>{
+      const el=document.createElement('div');el.className='aitem';
+      el.innerHTML=`
+        <div class="adot" style="background:${item.col};color:${item.col}"></div>
+        <div><div class="anm">${item.nm}</div><div class="adsc">${item.dsc}</div></div>
+      `;
+      el.onclick=()=>focusS(item.id);
+      list.appendChild(el);
+    });
+  });
+}
+
+function buildLibGrid(){
+  const g=document.getElementById('libGrid');g.innerHTML='';
+  ORGANS.forEach(o=>{
+    const card=document.createElement('div');card.className='scard';
+    card.innerHTML=`<div class="sico">${o.ico}</div><div class="stit">${o.name}</div><div class="sdsc">${o.desc.substring(0,65)}...</div>`;
+    card.onclick=()=>{closeSec('library');selOrg(o.id)};
+    g.appendChild(card);
+  });
+}
+
+function showInfo(title,html){
+  document.getElementById('iPanTitle').textContent=title;
+  document.getElementById('iPanBody').innerHTML=html;
+  document.getElementById('infoPan').style.display='block';
+}
+
+function focusS(id){
+  const s=STRUCTS[id];if(!s)return;
+  showInfo(s.name,`
+    <div class="ifield"><div class="ikey">Função</div><div class="ival hl">${s.func}</div></div>
+    <div class="ifield"><div class="ikey">Descrição Anatômica</div><div class="ival">${s.desc}</div></div>
+    <div class="idiv"></div>
+    <div class="ifield">
+      <div class="ikey">Patologias & Relevância Clínica</div>
+      <div class="tlist">${s.dis.map(d=>`<span class="tag r">${d}</span>`).join('')}</div>
+    </div>
+    <div class="ifield"><div class="tlist"><span class="tag c">Cardiology</span><span class="tag g">Anatomia</span><span class="tag a">Board</span></div></div>
+  `);
+  showToast(s.name,s.func,2500);
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────
+function showToast(title,msg,dur=2800){
+  const t=document.createElement('div');t.className='toast';
+  t.innerHTML=`<div class="tttl">${title}</div>${msg}`;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .3s,transform .3s';t.style.opacity='0';t.style.transform='translateX(18px)';setTimeout(()=>t.remove(),300)},dur);
+}
+
+// ── SECTIONS ──────────────────────────────────────────────────────────
+function showSec(s){
+  document.querySelectorAll('.ntab').forEach((t,i)=>{
+    t.classList.toggle('on',['lab','library','quiz','collab'][i]===s);
+  });
+  document.getElementById('sec-library').classList.toggle('on',s==='library');
+  document.getElementById('sec-collab').classList.toggle('on',s==='collab');
+  if(s==='quiz')openQuiz();
+}
+function closeSec(s){
+  document.getElementById('sec-'+s).classList.remove('on');
+  document.querySelectorAll('.ntab').forEach((t,i)=>t.classList.toggle('on',i===0));
+}
+
+function sstab(name,el){
+  document.querySelectorAll('.stab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.spane').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('sp-'+name).classList.add('on');
+}
+
+// ── MODES ─────────────────────────────────────────────────────────────
+const modeNames={realistic:'⬡ Anatômico',educational:'◈ Educacional',vascular:'↯ Vascular',xray:'☰ Raio-X',exploded:'⊕ Desmontagem'};
+function setMode(m,btn){
+  document.querySelectorAll('.mbttn').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  document.getElementById('mchip').textContent=modeNames[m]||m;
+  document.getElementById('rdMode').textContent='MODO: '+(m.toUpperCase());
+  // Visual cues on overlay
+  const vig=document.getElementById('sfVignette');
+  const modeColors={
+    realistic:'rgba(0,200,255,',
+    educational:'rgba(0,255,136,',
+    vascular:'rgba(255,0,110,',
+    xray:'rgba(200,220,255,',
+    exploded:'rgba(255,184,0,'
+  };
+  const c=modeColors[m]||modeColors.realistic;
+  vig.style.background=`
+    radial-gradient(ellipse 100% 10% at 50% 0%,${c}.09),transparent 70%),
+    radial-gradient(ellipse 100% 10% at 50% 100%,${c}.09),transparent 70%),
+    radial-gradient(ellipse 8% 100% at 0% 50%,${c}.06),transparent 70%),
+    radial-gradient(ellipse 8% 100% at 100% 50%,${c}.06),transparent 70%)
+  `;
+  showToast('Modo: '+(m.charAt(0).toUpperCase()+m.slice(1)),{
+    realistic:'Visualização anatômica completa do coração real.',
+    educational:'Modo de estudo com identificação simplificada.',
+    vascular:'Foco na vascularização coronária e grandes vasos.',
+    xray:'Visualização estilo radiografia cardíaca.',
+    exploded:'Desmontagem das estruturas para estudo.',
+  }[m]||'',2000);
+}
+
+// ── PRESETS ───────────────────────────────────────────────────────────
+function setViewP(v){
+  showToast('Vista',{
+    front:'Posicionando vista frontal do coração.',
+    back:'Posicionando vista posterior do coração.',
+    top:'Posicionando vista superior (base do coração).',
+    left:'Posicionando vista lateral esquerda.',
+    right:'Posicionando vista lateral direita.',
+    iso:'Posicionando vista isométrica anatômica.',
+  }[v]||'',1800);
+  // Guide user to rotate in Sketchfab
+  const msgs={
+    front:'Use o modelo 3D para visualizar a face anterior',
+    back:'Gire o modelo 180° para ver a face posterior',
+    top:'Incline o modelo para ver a base (os grandes vasos)',
+    left:'Gire levemente para ver a face lateral esquerda',
+    right:'Gire para ver a face lateral direita',
+    iso:'Vista em 3/4 — ideal para anatomia geral',
+  };
+  setTimeout(()=>showToast('Dica',msgs[v]||'',2500),500);
+}
+
+// ── TOOL ──────────────────────────────────────────────────────────────
+let activeTool='rotate';
+function setTool(t){
+  activeTool=t;
+  document.getElementById('tbR').classList.toggle('on',t==='rotate');
+  document.getElementById('tbA').classList.toggle('on',t==='annotate');
+  document.getElementById('annChip').style.display=t==='annotate'?'flex':'none';
+  if(t==='annotate'){
+    showToast('Modo Anotação','Clique em qualquer ponto da interface para criar uma anotação ancorada.',3000);
+    // Temporarily allow click on annotation layer
+    document.getElementById('annLayer').style.pointerEvents='all';
+    document.getElementById('annLayer').style.cursor='crosshair';
+    document.getElementById('sfWrap').style.pointerEvents=t==='annotate'?'none':'all';
+  }else{
+    document.getElementById('annLayer').style.pointerEvents='none';
+    document.getElementById('annLayer').style.cursor='default';
+    document.getElementById('sfWrap').style.pointerEvents='all';
+  }
+}
+
+// ── ANNOTATIONS ───────────────────────────────────────────────────────
+const CATS=[
+  {id:'estudo',lbl:'Estudo',col:'#00F5FF'},
+  {id:'duvida',lbl:'Dúvida',col:'#FFB800'},
+  {id:'clinica',lbl:'Clínica',col:'#00FF88'},
+  {id:'professor',lbl:'Professor',col:'#AB47BC'},
+  {id:'revisao',lbl:'Revisão',col:'#FF006E'},
+];
+let annotations=[],annCount=0,pendAnn=null,selCat='estudo';
+
+function buildCpick(){
+  const cp=document.getElementById('cpick');cp.innerHTML='';
+  CATS.forEach(c=>{
+    const d=document.createElement('div');d.className='copt'+(c.id===selCat?' on':'');
+    d.textContent=c.lbl;d.style.background=c.col+'18';d.style.borderColor=c.col+'44';d.style.color=c.col;
+    d.onclick=()=>{selCat=c.id;document.querySelectorAll('.copt').forEach(e=>e.classList.remove('on'));d.classList.add('on')};
+    cp.appendChild(d);
+  });
+}
+
+// Click on annotation layer
+document.getElementById('annLayer').addEventListener('click',e=>{
+  if(activeTool!=='annotate')return;
+  const vp=document.getElementById('vp');
+  const rect=vp.getBoundingClientRect();
+  const px=e.clientX-rect.left;
+  const py=e.clientY-rect.top;
+  const modal=document.getElementById('annMod');
+  modal.style.left=Math.min(px+10,rect.width-260)+'px';
+  modal.style.top=Math.min(py-10,rect.height-220)+'px';
+  modal.classList.add('on');
+  document.getElementById('annTxt').value='';
+  document.getElementById('annTxt').focus();
+  pendAnn={px,py};
+});
+
+function closeAnn(){document.getElementById('annMod').classList.remove('on');pendAnn=null}
+
+function saveAnn(){
+  const txt=document.getElementById('annTxt').value.trim();
+  if(!txt||!pendAnn){closeAnn();return}
+  annCount++;
+  const cat=CATS.find(c=>c.id===selCat);
+  const ann={id:annCount,txt,cat:selCat,col:cat.col,catLbl:cat.lbl,px:pendAnn.px,py:pendAnn.py};
+  annotations.push(ann);
+  renderPin(ann);closeAnn();updateNList();
+  showToast('Anotação #'+ann.id,'"'+txt.substring(0,45)+(txt.length>45?'...':'')+'"',2200);
+}
+
+function renderPin(ann){
+  const layer=document.getElementById('annLayer');
+  const pin=document.createElement('div');
+  pin.className='apin';pin.id='apin-'+ann.id;
+  pin.style.left=ann.px+'px';pin.style.top=ann.py+'px';
+  pin.innerHTML=`
+    <div class="abubble" style="border-color:${ann.col}44" onclick="highlightAnn(${ann.id})">
+      <div class="acat" style="color:${ann.col}">${ann.catLbl}</div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.4">${ann.txt}</div>
+    </div>
+    <div class="aline" style="background:${ann.col}70"></div>
+    <div class="adott" style="background:${ann.col};border-color:${ann.col}80"></div>
+  `;
+  layer.appendChild(pin);
+}
+
+function highlightAnn(id){
+  const ann=annotations.find(a=>a.id===id);if(!ann)return;
+  showToast(`Anotação #${ann.id} — ${ann.catLbl}`,ann.txt,3500);
+}
+
+function delAnn(id){
+  annotations=annotations.filter(a=>a.id!==id);
+  const p=document.getElementById('apin-'+id);if(p)p.remove();
+  updateNList();
+}
+
+function updateNList(){
+  const list=document.getElementById('nlist');
+  const stab=document.getElementById('stab-notes');
+  if(!annotations.length){
+    list.innerHTML='<div class="empty">Nenhuma anotação ainda.<br><br>Clique em <span style="color:var(--cyan)">✎ Anotar</span> na barra inferior<br>ou no toolbar lateral.</div>';
+    stab.innerHTML='Notas';return;
+  }
+  stab.innerHTML='Notas<span class="nbadge">'+annotations.length+'</span>';
+  list.innerHTML=annotations.map(a=>`
+    <div class="nitem" onclick="highlightAnn(${a.id})">
+      <div class="ndot" style="background:${a.col}"></div>
+      <div style="flex:1;min-width:0">
+        <div class="nnum">#${a.id} — ${a.catLbl}</div>
+        <div class="ntxt">${a.txt}</div>
+      </div>
+      <button class="ndel" onclick="event.stopPropagation();delAnn(${a.id})">×</button>
+    </div>
+  `).join('');
+}
+
+// ── BEAT ──────────────────────────────────────────────────────────────
+let bpm=72,beatOn=true,ecgPh=0;
+function setBPM(v){
+  bpm=parseInt(v);
+  ['bpmV','bpmD'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=v});
+  document.getElementById('bpmNum').textContent=v;
+  document.getElementById('rdBpm').textContent=`BPM: ${v} // ${v<60?'BRADICARDIA':v>100?'TAQUICARDIA':'NORMAL'}`;
+  // Sync both range inputs
+  ['bpmR','bpmR2'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=v});
+}
+function toggleBeat(){
+  beatOn=!beatOn;
+  ['beatB','beatB2'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.textContent=beatOn?'⏸ Parar Batimento':'▶ Iniciar Batimento';
+    el.className='hbtn'+(beatOn?' prim':'');
+  });
+}
+
+// ── ECG ───────────────────────────────────────────────────────────────
+function startECG(){
+  const canvas=document.getElementById('ecgC');
+  const ctx=canvas.getContext('2d');
+  function wave(t){
+    const m=((t%1)+1)%1;
+    if(m<.08)return Math.sin(m/.08*Math.PI)*.22;
+    if(m<.16)return 0;
+    if(m<.20)return Math.sin((m-.16)/.04*Math.PI)*-.14;
+    if(m<.24)return Math.sin((m-.20)/.04*Math.PI)*1.0;
+    if(m<.32)return Math.sin((m-.24)/.08*Math.PI)*-.28;
+    if(m<.52)return Math.sin((m-.32)/.20*Math.PI)*.16;
+    return 0;
+  }
+  function draw(){
+    requestAnimationFrame(draw);
+    if(beatOn)ecgPh+=bpm/60*.016;
+    ctx.clearRect(0,0,118,33);
+    ctx.strokeStyle='#00F5FF';ctx.lineWidth=1.4;ctx.shadowColor='#00F5FF';ctx.shadowBlur=5;
+    ctx.beginPath();
+    for(let x=0;x<118;x++){
+      const t=beatOn?ecgPh-(118-x)/118*2.2:0;
+      const y=16.5-wave(t)*13;
+      x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    if(!beatOn){
+      ctx.strokeStyle='rgba(0,245,255,.18)';ctx.lineWidth=.5;ctx.shadowBlur=0;
+      ctx.beginPath();ctx.moveTo(0,16.5);ctx.lineTo(118,16.5);ctx.stroke();
+    }
+  }
+  draw();
+}
+
+// ── QUIZ ──────────────────────────────────────────────────────────────
+const QD=[
+  {q:'Qual câmara cardíaca possui a parede mais espessa e gera maior pressão sistólica (~120mmHg)?',
+   opts:['Átrio Direito','Ventrículo Esquerdo','Ventrículo Direito','Átrio Esquerdo'],ans:1,
+   exp:'O VE possui parede de ~11mm (vs. 3mm do VD) pois gera pressão sistólica de ~120mmHg para vencer a resistência vascular sistêmica.',struct:'lv'},
+  {q:'Qual válvula cardíaca possui APENAS dois folhetos (bicúspide)?',
+   opts:['Aórtica','Pulmonar','Tricúspide','Mitral'],ans:3,
+   exp:'A válvula mitral é a única válvula bicúspide do coração adulto, situada entre o AE e VE. As demais possuem três cúspides.',struct:'mv'},
+  {q:'O ramo LAD (descendente anterior esquerda) é chamado de "widow maker" pois sua obstrução proximal provoca:',
+   opts:['IAM inferior pequeno','IAM anterior extenso com alta mortalidade','Bradiarritmia isolada','Insuficiência valvar mitral'],ans:1,
+   exp:'A LAD irriga a parede anterior e o septo do VE (~50% da massa miocárdica). Sua oclusão proximal causa grande infarto anterior com disfunção sistólica grave.',struct:'lca'},
+  {q:'Qual estrutura cardíaca é responsável pela geração do impulso elétrico fisiológico?',
+   opts:['Válvula Aórtica','Fibras de Purkinje','Nó Sinoatrial','Feixe de His'],ans:2,
+   exp:'O nó sinoatrial (SA), localizado no AD próximo à VCS, é o marcapasso natural. Gera impulsos a 60-100bpm que se propagam pelo sistema éxito-condutor.',struct:'ra'},
+  {q:'Qual é a única artéria do organismo que conduz sangue DESOXIGENADO?',
+   opts:['Aorta','Artéria Renal','Artéria Pulmonar','Artéria Coronária'],ans:2,
+   exp:'A artéria pulmonar é o único caso de artéria transportando sangue venoso. Conduz o sangue do VD aos pulmões para hematose — troca de CO₂ por O₂.',struct:'pulm'},
+  {q:'A estenose aórtica grave é definida por área valvar menor que:',
+   opts:['3 cm²','2 cm²','1 cm²','0.5 cm²'],ans:2,
+   exp:'Estenose aórtica grave: área <1cm² e gradiente médio >40mmHg. Cursa com a tríade clínica: angina, síncope e dispneia. Sem cirurgia, sobrevida de 2-3 anos.',struct:'av'},
+  {q:'Em dominância direita (70% dos casos), o nó AV é irrigado por qual artéria?',
+   opts:['LAD','Circunflexa','Coronária Direita','Ramo Diagonal'],ans:2,
+   exp:'Em dominância direita, a RCA dá origem à artéria do nó AV. Isso explica por que oclusões de RCA podem causar bloqueio AV de 2º e 3º graus.',struct:'rca'},
+  {q:'A fibrilação atrial frequentemente se origina próximo aos óstios de qual estrutura?',
+   opts:['Veias Cavas','Veias Pulmonares','Artéria Pulmonar','Seio Coronário'],ans:1,
+   exp:'Focos ectópicos nas mangas miocárdicas das veias pulmonares desencadeiam ~90% das FA. O isolamento elétrico dessas veias é base do tratamento por ablação.',struct:'la'},
+];
+
+let qIdx=0,qScore=0,qAns=false;
+function openQuiz(){
+  qIdx=0;qScore=0;qAns=false;
+  document.getElementById('quizPan').style.display='block';
+  renderQuiz();
+}
+function renderQuiz(){
+  const body=document.getElementById('qBody');
+  if(qIdx>=QD.length){
+    const pct=Math.round(qScore/QD.length*100);
+    const msg=qScore>=7?'🏆 Excelente! Domínio avançado de anatomia cardíaca!':qScore>=5?'👍 Bom resultado! Continue revisando!':'📖 Revise o conteúdo — pratique mais!';
+    body.innerHTML=`
+      <div style="text-align:center;padding:12px 0 16px">
+        <div class="scnum">${qScore}/${QD.length}</div>
+        <div class="sclbl" style="margin-bottom:12px">${pct}% de aproveitamento</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.5;margin-bottom:14px">${msg}</div>
+        <div style="display:flex;gap:6px">
+          <button class="hbtn" onclick="openQuiz()" style="flex:1;padding:7px">↺ Repetir</button>
+          <button class="hbtn prim" onclick="document.getElementById('quizPan').style.display='none'" style="flex:1;padding:7px">✓ Concluir</button>
+        </div>
+      </div>
+    `;return;
+  }
+  const q=QD[qIdx];
+  body.innerHTML=`
+    <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--text3);margin-bottom:9px;text-transform:uppercase;letter-spacing:.5px">
+      Questão ${qIdx+1}/${QD.length} &nbsp;·&nbsp; Score ${qScore}pts
+    </div>
+    <div class="qq">${q.q}</div>
+    <div class="qopts">${q.opts.map((o,i)=>`<div class="qopt" id="qo${i}" onclick="ansQ(${i})">${'ABCD'[i]}) ${o}</div>`).join('')}</div>
+    <div class="qfb" id="qfb"></div>
+    <button class="hbtn prim" id="qnxt" onclick="nextQ()" style="display:none;margin-top:9px;width:100%;padding:7px">Próxima →</button>
+  `;
+}
+function ansQ(c){
+  if(qAns)return;qAns=true;
+  const q=QD[qIdx];const ok=c===q.ans;if(ok)qScore++;
+  document.querySelectorAll('.qopt').forEach((el,i)=>{
+    if(i===q.ans)el.classList.add('ok');else if(i===c&&!ok)el.classList.add('fail');
+  });
+  const fb=document.getElementById('qfb');
+  fb.innerHTML=`<strong>${ok?'✓ Correto!':'✗ Incorreto.'}</strong> ${q.exp}`;
+  fb.className='qfb sh '+(ok?'ok':'fail');
+  document.getElementById('qnxt').style.display='block';
+  focusS(q.struct);
+}
+function nextQ(){qIdx++;qAns=false;renderQuiz()}
+
+// ── FULLSCREEN ────────────────────────────────────────────────────────
+function openFullSF(){
+  const frame=document.getElementById('sfFrame');
+  if(frame.requestFullscreen)frame.requestFullscreen();
+  else if(frame.webkitRequestFullscreen)frame.webkitRequestFullscreen();
+  else window.open(frame.src,'_blank');
+}
+</script>
+</body>
+</html>
