@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HoloMed 3D — Mesa Holográfica Médica</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cyan:#00F5FF;--blue:#0066FF;--green:#00FF88;--pink:#FF006E;--amber:#FFB800;--purple:#7C3AED;
+  --bg:#020408;--panel:rgba(5,12,24,0.96);--glass:rgba(0,200,255,0.04);--glass2:rgba(0,200,255,0.09);
+  --border:rgba(0,200,255,0.13);--border2:rgba(0,200,255,0.28);
+  --text:#E8F4FF;--text2:#7AA4C8;--text3:#3A5870;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{color:var(--text);font-family:'Inter',sans-serif;cursor:none;user-select:none}
+
+/* CURSOR */
+#cur{position:fixed;width:10px;height:10px;border:1.5px solid var(--cyan);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);mix-blend-mode:screen}
+#curR{position:fixed;width:28px;height:28px;border:0.5px solid rgba(0,245,255,0.2);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%)}
+
+/* BG */
+#scan{position:fixed;inset:0;pointer-events:none;z-index:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,10,20,0.08) 2px,rgba(0,10,20,0.08) 4px);opacity:.25}
+#grid{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,200,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,.025) 1px,transparent 1px);
+  background-size:55px 55px;mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 20%,transparent 100%)}
+#ptcl{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+.pt{position:absolute;border-radius:50%;animation:ptUp linear infinite}
+@keyframes ptUp{0%{transform:translateY(100vh) scale(0);opacity:0}8%{opacity:1}92%{opacity:.3}100%{transform:translateY(-8vh) scale(1);opacity:0}}
+
+/* LAYOUT */
+#app{position:relative;display:flex;height:100vh;flex-direction:column;z-index:10}
+
+/* TOPBAR */
+#topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;height:50px;flex-shrink:0;
+  border-bottom:.5px solid var(--border);
+  background:linear-gradient(180deg,rgba(2,4,8,.98),rgba(4,9,18,.94));
+  backdrop-filter:blur(24px);z-index:200
+}
+.logo{display:flex;align-items:center;gap:10px;font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--cyan);letter-spacing:-.5px}
+.logo-icon{width:30px;height:30px;border:1.5px solid var(--cyan);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;background:rgba(0,245,255,.06);box-shadow:0 0 10px rgba(0,245,255,.12)}
+.logo sub{color:var(--text3);font-weight:400;font-size:9.5px;font-family:'JetBrains Mono',monospace;margin-left:2px;letter-spacing:.3px}
+.tr{display:flex;align-items:center;gap:8px}
+.chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:.5px solid var(--border2);background:var(--glass);font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 2s ease infinite;box-shadow:0 0 6px var(--green)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+/* tool indicator chip */
+#toolChip{display:none;cursor:pointer}
+#toolChip.on{display:flex}
+
+/* MAIN */
+#main{display:flex;flex:1;overflow:hidden;position:relative}
+
+/* SIDEBAR */
+#sb{
+  width:258px;flex-shrink:0;
+  border-right:.5px solid var(--border);
+  background:linear-gradient(180deg,rgba(2,4,9,.98),rgba(4,10,20,.96));
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:width .3s cubic-bezier(.4,0,.2,1);
+  z-index:50
+}
+#sb.off{width:0}
+.stabs{display:flex;border-bottom:.5px solid var(--border);flex-shrink:0}
+.stab{flex:1;padding:9px 3px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.4px;color:var(--text3);cursor:pointer;transition:all .2s;text-transform:uppercase;border-bottom:1.5px solid transparent;white-space:nowrap}
+.stab.on{color:var(--cyan);border-bottom-color:var(--cyan)}
+.stab:hover:not(.on){color:var(--text2)}
+.spane{display:none;flex:1;overflow-y:auto;padding:0 7px 10px}
+.spane.on{display:block}
+.spane::-webkit-scrollbar{width:2px}
+.spane::-webkit-scrollbar-thumb{background:var(--border2);border-radius:1px}
+
+/* Organs */
+.sbox{margin:9px 0 5px;position:relative}
+.sbox input{width:100%;padding:7px 10px 7px 28px;background:var(--glass);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:10.5px;font-family:'JetBrains Mono',monospace;outline:none;transition:border-color .2s}
+.sbox input::placeholder{color:var(--text3)}
+.sbox input:focus{border-color:var(--border2);background:var(--glass2)}
+.sico{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px;pointer-events:none}
+.syslbl{font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);padding:10px 7px 3px;display:flex;align-items:center;gap:5px}
+.syslbl::after{content:'';flex:1;height:.5px;background:var(--border)}
+.oitem{display:flex;align-items:center;gap:8px;padding:6px 7px;border-radius:6px;cursor:pointer;transition:all .14s;margin-bottom:1px;border:.5px solid transparent}
+.oitem:hover{background:var(--glass);border-color:var(--border)}
+.oitem.on{background:rgba(0,245,255,.07);border-color:rgba(0,245,255,.2)}
+.oico{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;border:.5px solid var(--border)}
+.onm{font-size:11px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.osys{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text3);text-transform:uppercase}
+.obadge{font-family:'JetBrains Mono',monospace;font-size:7px;padding:2px 5px;border-radius:3px;flex-shrink:0;white-space:nowrap}
+
+/* Anatomy */
+.albl{font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);padding:10px 7px 3px;display:flex;align-items:center;gap:5px}
+.albl::after{content:'';flex:1;height:.5px;background:var(--border)}
+.aitem{display:flex;align-items:flex-start;gap:8px;padding:7px;border-radius:6px;cursor:pointer;transition:all .14s;border:.5px solid transparent;margin-bottom:1px}
+.aitem:hover{background:var(--glass);border-color:var(--border)}
+.adot{width:7px;height:7px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.anm{font-size:11px;font-weight:500;color:var(--text)}
+.adsc{font-size:9.5px;color:var(--text3);margin-top:1px;line-height:1.35}
+
+/* Notes */
+.nitem{display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:6px;cursor:pointer;border:.5px solid transparent;margin-bottom:3px;transition:all .14s}
+.nitem:hover{background:var(--glass);border-color:var(--border)}
+.ndot{width:7px;height:7px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.ntxt{font-size:10.5px;color:var(--text2);line-height:1.4;flex:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.nnum{font-family:'JetBrains Mono',monospace;font-size:7.5px;color:var(--text3);margin-bottom:2px}
+.ndel{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:0 2px;transition:color .15s;flex-shrink:0}
+.ndel:hover{color:var(--pink)}
+.empty{text-align:center;padding:34px 14px;color:var(--text3);font-size:10px;line-height:1.9;font-family:'JetBrains Mono',monospace}
+.nbadge{display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;border-radius:7px;background:var(--cyan);color:var(--bg);font-family:'JetBrains Mono',monospace;font-size:7px;font-weight:700;padding:0 3px;margin-left:3px}
+
+/* Controls tab */
+.cgrp{margin-bottom:14px;padding-top:7px}
+.cgrptitle{font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);margin-bottom:8px;padding-bottom:5px;border-bottom:.5px solid var(--border)}
+.srow{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.snm{font-size:10.5px;color:var(--text2);width:65px;flex-shrink:0}
+input[type=range].hr{-webkit-appearance:none;height:3px;background:var(--border2);border-radius:2px;outline:none;cursor:pointer;flex:1}
+input[type=range].hr::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px rgba(0,245,255,.5);cursor:pointer}
+.sval{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);width:26px;text-align:right}
+
+/* VIEWPORT */
+#vp{flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse 55% 50% at 50% 45%,#010C1A,#020408 70%)}
+
+/* HOLO RINGS */
+.hring{position:absolute;border-radius:50%;border:.5px solid;pointer-events:none;animation:rpulse 4s ease-in-out infinite}
+@keyframes rpulse{0%,100%{opacity:.08;transform:translate(-50%,-50%) scale(1)}50%{opacity:.22;transform:translate(-50%,-50%) scale(1.02)}}
+
+/* HOLO TABLE */
+#htable{
+  position:absolute;bottom:50px;left:50%;transform:translateX(-50%);
+  width:min(660px,88%);height:40px;border-radius:50%;
+  border-top:1px solid rgba(0,200,255,.25);
+  box-shadow:0 0 50px rgba(0,200,255,.08),inset 0 1px 0 rgba(0,245,255,.15);
+  pointer-events:none;
+  background:linear-gradient(180deg,rgba(0,200,255,.03),transparent);
+}
+#htable::before{
+  content:'';position:absolute;top:-1px;left:20%;right:20%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,245,255,.8),transparent);
+  animation:hscan 5s ease-in-out infinite;
+}
+@keyframes hscan{0%,100%{left:10%;right:75%}50%{left:75%;right:10%}}
+
+/* SKETCHFAB */
+#sfWrap{
+  position:absolute;top:48px;left:50%;transform:translateX(-50%);
+  width:min(720px,100%);bottom:50px;z-index:10;
+  display:flex;align-items:center;justify-content:center;
+}
+#sfFrame{width:100%;height:100%;border:none;border-radius:10px;background:transparent;
+  box-shadow:0 0 0 1px rgba(0,245,255,.1),0 0 36px rgba(0,200,255,.07)}
+#sfVignette{position:absolute;inset:0;pointer-events:none;border-radius:10px;z-index:11;
+  background:radial-gradient(ellipse 100% 10% at 50% 0%,rgba(0,200,255,.06),transparent 70%),
+             radial-gradient(ellipse 100% 10% at 50% 100%,rgba(0,200,255,.06),transparent 70%),
+             radial-gradient(ellipse 7% 100% at 0% 50%,rgba(0,200,255,.04),transparent 70%),
+             radial-gradient(ellipse 7% 100% at 100% 50%,rgba(0,200,255,.04),transparent 70%)}
+.hcorner{position:absolute;width:20px;height:20px;pointer-events:none;z-index:13}
+.hcorner.tl{top:0;left:0;border-top:1.5px solid var(--cyan);border-left:1.5px solid var(--cyan);border-radius:5px 0 0 0}
+.hcorner.tr{top:0;right:0;border-top:1.5px solid var(--cyan);border-right:1.5px solid var(--cyan);border-radius:0 5px 0 0}
+.hcorner.bl{bottom:0;left:0;border-bottom:1.5px solid var(--cyan);border-left:1.5px solid var(--cyan);border-radius:0 0 0 5px}
+.hcorner.br{bottom:0;right:0;border-bottom:1.5px solid var(--cyan);border-right:1.5px solid var(--cyan);border-radius:0 0 5px 0}
+.sf-readout{position:absolute;font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--cyan);opacity:.6;pointer-events:none;z-index:14;background:rgba(0,5,12,.72);padding:3px 7px;border-radius:3px;border:.5px solid rgba(0,245,255,.13);letter-spacing:.5px}
+
+/* TOOLBAR */
+#tb{
+  position:absolute;top:50%;right:10px;transform:translateY(-50%);
+  display:flex;flex-direction:column;gap:3px;
+  background:rgba(2,4,8,.88);border:.5px solid var(--border);
+  border-radius:9px;padding:5px;backdrop-filter:blur(20px);z-index:40;
+}
+.tbttn{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .14s;border:.5px solid transparent;background:none;color:var(--text3);font-size:14px;position:relative}
+.tbttn:hover{background:var(--glass);border-color:var(--border);color:var(--text2)}
+.tbttn.on{background:rgba(0,245,255,.12);border-color:rgba(0,245,255,.3);color:var(--cyan)}
+.tsep{height:.5px;background:var(--border);margin:2px 0}
+.ttip{position:absolute;right:39px;top:50%;transform:translateY(-50%);background:var(--panel);border:.5px solid var(--border2);border-radius:5px;padding:4px 8px;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text);opacity:0;pointer-events:none;transition:opacity .14s;text-transform:uppercase;letter-spacing:.5px}
+.tbttn:hover .ttip{opacity:1}
+
+/* BOTTOM BAR */
+#bbar{
+  position:absolute;bottom:0;left:0;right:0;height:50px;
+  border-top:.5px solid var(--border);
+  background:linear-gradient(0deg,rgba(2,4,8,.98),rgba(4,9,18,.93));
+  backdrop-filter:blur(22px);
+  display:flex;align-items:center;padding:0 12px;gap:8px;z-index:40;
+}
+.bsep{width:.5px;height:24px;background:var(--border);margin:0 2px;flex-shrink:0}
+.hbtn{padding:5px 11px;border-radius:5px;border:.5px solid var(--border2);background:var(--glass);color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:8px;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.hbtn:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,245,255,.07)}
+.hbtn.prim{border-color:rgba(0,245,255,.4);background:rgba(0,245,255,.1);color:var(--cyan)}
+.hbtn.amb{border-color:rgba(255,184,0,.35);background:rgba(255,184,0,.06);color:var(--amber)}
+.hbtn.amb:hover{border-color:var(--amber);background:rgba(255,184,0,.12)}
+.hbtn.act{border-color:rgba(255,0,110,.4);background:rgba(255,0,110,.1);color:var(--pink)}
+.bpm-num{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;color:var(--cyan);line-height:1}
+.bpm-lbl{font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+#ecgC{width:110px;height:30px}
+/* hide ecg when non-heart */
+#bbarEcg{display:flex;align-items:center;gap:8px;margin-left:auto}
+
+/* FLOATING PANELS */
+.fpan{position:absolute;background:rgba(2,6,15,.96);border:.5px solid var(--border);border-radius:11px;backdrop-filter:blur(24px);z-index:60;box-shadow:0 4px 28px rgba(0,0,0,.5),0 0 16px rgba(0,245,255,.03)}
+.phdr{padding:10px 13px;border-bottom:.5px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.phdr h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:var(--cyan)}
+.pcls{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;color:var(--text3);transition:all .14s;background:none;border:none}
+.pcls:hover{background:var(--glass2);color:var(--text)}
+.pbdy{padding:13px;overflow-y:auto;max-height:calc(100vh - 200px)}
+.pbdy::-webkit-scrollbar{width:2px}
+.pbdy::-webkit-scrollbar-thumb{background:var(--border2);border-radius:1px}
+.ifield{margin-bottom:11px}
+.ikey{font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px}
+.ival{font-size:11px;color:var(--text);line-height:1.5}
+.ival.hl{color:var(--cyan);font-weight:500}
+.idiv{height:.5px;background:var(--border);margin:10px 0}
+.tlist{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tag{padding:2px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:7px;text-transform:uppercase;letter-spacing:.5px}
+.tag.r{background:rgba(255,0,110,.1);border:.5px solid rgba(255,0,110,.25);color:var(--pink)}
+.tag.c{background:rgba(0,245,255,.08);border:.5px solid rgba(0,245,255,.2);color:var(--cyan)}
+.tag.g{background:rgba(0,255,136,.08);border:.5px solid rgba(0,255,136,.2);color:var(--green)}
+
+/* TEXT LABEL MODAL */
+#txtMod{position:absolute;z-index:90;background:rgba(2,6,16,.97);border:.5px solid rgba(255,184,0,.3);border-radius:11px;padding:14px;width:232px;display:none;backdrop-filter:blur(24px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+#txtMod.on{display:block;animation:popIn .18s ease}
+@keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+.macts{display:flex;gap:5px}
+.mbtn{flex:1;padding:6px;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.5px;border:.5px solid var(--border);background:var(--glass);color:var(--text2);transition:all .14s}
+.mbtn.sv{background:rgba(0,245,255,.1);border-color:rgba(0,245,255,.3);color:var(--cyan)}
+#txtMod h4{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--amber);margin-bottom:9px;text-transform:uppercase;letter-spacing:1px}
+.tszrow{display:flex;gap:4px;margin-bottom:9px}
+.tszbtn{padding:3px 9px;border-radius:4px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;border:.5px solid var(--border);background:var(--glass);color:var(--text3);transition:all .14s}
+.tszbtn:hover,.tszbtn.on{border-color:var(--amber);color:var(--amber);background:rgba(255,184,0,.07)}
+.tcolrow{display:flex;gap:5px;margin-bottom:9px;align-items:center}
+.tcolswatch{width:19px;height:19px;border-radius:4px;cursor:pointer;border:2px solid transparent;transition:all .14s;flex-shrink:0}
+.tcolswatch.on{border-color:#fff;transform:scale(1.15)}
+#txtInput{width:100%;height:50px;background:var(--glass);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Inter',sans-serif;padding:8px;resize:none;outline:none;margin-bottom:8px;transition:border-color .14s}
+#txtInput:focus{border-color:rgba(255,184,0,.5)}
+
+/* TEXT LABELS */
+.mlabel{position:absolute;pointer-events:all;cursor:move;z-index:36;font-family:'JetBrains Mono',monospace;letter-spacing:.5px;text-shadow:0 0 10px rgba(0,0,0,1),0 1px 4px rgba(0,0,0,.9);user-select:none;white-space:nowrap;line-height:1}
+.mlabel:hover .mlabel-del{opacity:1}
+.mlabel-del{position:absolute;top:-8px;right:-8px;width:15px;height:15px;background:rgba(255,0,110,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;cursor:pointer;opacity:0;transition:opacity .14s;border:.5px solid rgba(255,80,140,.5);line-height:1;pointer-events:all}
+
+/* NOTES LAYER */
+#annLayer{position:absolute;inset:0;pointer-events:none;z-index:35;overflow:hidden}
+
+/* TOAST */
+.toast{position:fixed;top:62px;right:14px;z-index:500;background:rgba(2,6,15,.97);border:.5px solid rgba(0,245,255,.25);border-radius:9px;padding:10px 14px;max-width:256px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2);box-shadow:0 4px 20px rgba(0,0,0,.5);animation:toastIn .22s ease;pointer-events:none}
+@keyframes toastIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
+.tttl{color:var(--cyan);font-size:11px;font-weight:600;margin-bottom:2px;font-family:'Syne',sans-serif}
+
+/* LOADER */
+#loader{position:fixed;inset:0;background:var(--bg);z-index:9995;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity .6s}
+.llogo{font-family:'Syne',sans-serif;font-size:40px;font-weight:800;color:var(--cyan);letter-spacing:-1.5px}
+.lsub{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text3);text-transform:uppercase;letter-spacing:2px}
+.lbar{width:200px;height:2px;background:var(--border);border-radius:1px;overflow:hidden}
+.lfill{height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:1px;width:0;transition:width .08s;box-shadow:0 0 8px var(--cyan)}
+.lpct{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)}
+.lstep{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);min-height:15px;letter-spacing:.5px}
+</style>
+</head>
+<body>
+
+<div id="cur"></div><div id="curR"></div>
+<div id="scan"></div><div id="grid"></div><div id="ptcl"></div>
+
+<!-- LOADER -->
+<div id="loader">
+  <div style="position:relative">
+    <div class="llogo">HoloMed 3D</div>
+    <div style="position:absolute;top:-9px;right:-17px;width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px var(--cyan);animation:blink 1.2s ease infinite"></div>
+  </div>
+  <div class="lsub">Mesa Holográfica Médica</div>
+  <div class="lbar"><div class="lfill" id="lf"></div></div>
+  <div class="lpct" id="lpct">0%</div>
+  <div class="lstep" id="lstep">Carregando...</div>
+</div>
+
+<div id="app" style="opacity:0;transition:opacity .7s">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <div class="logo">
+      <div class="logo-icon">⬡</div>
+      HoloMed 3D
+      <sub>// v3.0</sub>
+    </div>
+    <div class="tr">
+      <div class="chip"><div class="live-dot"></div>WebGL Ativo</div>
+      <div class="chip" id="toolChip" onclick="setTool('rotate')">— Clique para sair</div>
+    </div>
+  </div>
+
+  <div id="main">
+
+    <!-- SIDEBAR -->
+    <div id="sb">
+      <div class="stabs">
+        <div class="stab on"  onclick="sstab('organs',this)">Órgãos</div>
+        <div class="stab"     onclick="sstab('anatomy',this)">Estruturas</div>
+        <div class="stab"     onclick="sstab('notes',this)" id="stab-notes">Notas</div>
+        <div class="stab"     onclick="sstab('controls',this)">Vista</div>
+      </div>
+
+      <div class="spane on" id="sp-organs">
+        <div class="sbox">
+          <span class="sico">⌕</span>
+          <input type="text" placeholder="Buscar órgão..." id="srch" oninput="buildOList(this.value)">
+        </div>
+        <div id="olist"></div>
+      </div>
+
+      <div class="spane" id="sp-anatomy">
+        <div id="alist"></div>
+      </div>
+
+      <div class="spane" id="sp-notes">
+        <div id="nlist"></div>
+      </div>
+
+      <div class="spane" id="sp-controls">
+        <div class="cgrp">
+          <div class="cgrptitle">Modelo 3D</div>
+          <div style="font-size:10px;color:var(--text3);line-height:1.65;margin-bottom:10px">
+            Use o <strong style="color:var(--text2)">mouse</strong> para girar, <strong style="color:var(--text2)">scroll</strong> para zoom e <strong style="color:var(--text2)">shift+arrastar</strong> para mover.
+          </div>
+          <button class="hbtn prim" onclick="reloadModel()" style="width:100%;padding:7px;margin-bottom:5px">↺ Recarregar Modelo</button>
+          <button class="hbtn" onclick="openFullSF()" style="width:100%;padding:7px">⛶ Tela Cheia</button>
+        </div>
+        <div class="cgrp" id="ecgCtrl">
+          <div class="cgrptitle">ECG — Batimento</div>
+          <div class="srow">
+            <span class="snm">BPM</span>
+            <input type="range" class="hr" min="30" max="180" value="72" id="bpmSlider" oninput="setBPM(this.value)">
+            <span class="sval" id="bpmValSb">72</span>
+          </div>
+          <button class="hbtn" onclick="toggleBeat()" id="beatBtnSb" style="width:100%;padding:7px;margin-top:2px">⏸ Parar Batimento</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEWPORT -->
+    <div id="vp">
+
+      <div class="hring" style="width:560px;height:280px;border-color:rgba(0,200,255,.05);top:54%;left:50%;transform:translate(-50%,-50%);z-index:2"></div>
+      <div class="hring" style="width:400px;height:200px;border-color:rgba(0,200,255,.08);top:54%;left:50%;transform:translate(-50%,-50%);animation-delay:-2s;z-index:2"></div>
+      <div class="hring" style="width:260px;height:130px;border-color:rgba(0,200,255,.12);top:54%;left:50%;transform:translate(-50%,-50%);animation-delay:-1s;z-index:2"></div>
+
+      <!-- 3D MODEL -->
+      <div id="sfWrap">
+        <iframe id="sfFrame" title="HoloMed 3D"
+          frameborder="0" allowfullscreen mozallowfullscreen="true" webkitallowfullscreen="true"
+          allow="autoplay; fullscreen; xr-spatial-tracking"
+          xr-spatial-tracking execution-while-out-of-viewport execution-while-not-rendered web-share
+          src="https://sketchfab.com/models/ac8f37578cd84c3bb4417234cbafb3a2/embed?autostart=1&transparent=1&ui_theme=dark&ui_color=00F5FF&ui_watermark=0&ui_infos=0&ui_controls=1&ui_stop=0&preload=1&dnt=0">
+        </iframe>
+        <div id="sfVignette"></div>
+        <div class="hcorner tl"></div><div class="hcorner tr"></div>
+        <div class="hcorner bl"></div><div class="hcorner br"></div>
+        <div class="sf-readout" style="top:10px;left:12px" id="sfReadoutL">CORACAO // HOMO SAPIENS</div>
+        <div class="sf-readout" style="top:10px;right:12px" id="rdBpm">BPM: 72 // NORMAL</div>
+        <div class="sf-readout" style="bottom:10px;left:12px" id="sfReadoutBot">4 CÂMARAS // 2 ÁTRIOS // 2 VENTRÍCULOS</div>
+      </div>
+
+      <div id="htable"></div>
+      <div id="annLayer"></div>
+
+      <!-- INFO PANEL -->
+      <div class="fpan" id="infoPan" style="top:58px;left:10px;width:270px;display:none">
+        <div class="phdr">
+          <h3 id="iPanTitle">—</h3>
+          <button class="pcls" onclick="document.getElementById('infoPan').style.display='none'">✕</button>
+        </div>
+        <div class="pbdy" id="iPanBody"></div>
+      </div>
+
+      <!-- TEXT LABEL MODAL -->
+      <div id="txtMod">
+        <h4>✍ Texto no Modelo</h4>
+        <div class="tszrow" id="tszrow"></div>
+        <div class="tcolrow" id="tcolrow"></div>
+        <textarea id="txtInput" placeholder="Texto que aparecerá sobre o modelo..."></textarea>
+        <div class="macts">
+          <button class="mbtn" onclick="closeTxtMod()">Cancelar</button>
+          <button class="mbtn sv" style="border-color:rgba(255,184,0,.4);background:rgba(255,184,0,.1);color:var(--amber)" onclick="saveTxtLabel()">✓ Inserir</button>
+        </div>
+      </div>
+
+      <!-- TOOLBAR (right) -->
+      <div id="tb">
+        <button class="tbttn on" id="tbR" onclick="setTool('rotate')">↺<span class="ttip">Navegar</span></button>
+        <button class="tbttn"    id="tbT" onclick="setTool('text')">✍<span class="ttip">Escrever</span></button>
+        <div class="tsep"></div>
+        <button class="tbttn" onclick="document.getElementById('sb').classList.toggle('off')">⇤<span class="ttip">Sidebar</span></button>
+        <button class="tbttn" onclick="openFullSF()">⛶<span class="ttip">Tela Cheia</span></button>
+      </div>
+
+      <!-- BOTTOM BAR -->
+      <div id="bbar">
+        <button class="hbtn prim" onclick="setTool('text')">✍ Escrever</button>
+        <button class="hbtn"      onclick="reloadModel()">↺ Recarregar</button>
+        <div id="bbarEcg">
+          <div class="bsep"></div>
+          <button class="hbtn" onclick="toggleBeat()" id="beatBtn">⏸ Parar</button>
+          <div class="bsep"></div>
+          <div>
+            <div class="bpm-num" id="bpmNum">72</div>
+            <div class="bpm-lbl">BPM</div>
+          </div>
+          <canvas id="ecgC" width="110" height="30"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// HOLOMED 3D — ENGINE
+// ══════════════════════════════════════════════════════
+
+// CURSOR
+const C=document.getElementById('cur'),CR=document.getElementById('curR');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;C.style.left=mx+'px';C.style.top=my+'px'});
+(function loop(){rx+=(mx-rx)*.12;ry+=(my-ry)*.12;CR.style.left=rx+'px';CR.style.top=ry+'px';requestAnimationFrame(loop)})();
+
+// PARTICLES
+(function(){
+  const p=document.getElementById('ptcl');
+  const cols=['rgba(0,245,255,','rgba(0,100,255,','rgba(0,200,170,','rgba(0,255,136,'];
+  for(let i=0;i<38;i++){
+    const d=document.createElement('div');const s=Math.random()*2+.6;
+    Object.assign(d.style,{width:s+'px',height:s+'px',background:cols[i%4]+(Math.random()*.5+.1)+')',left:Math.random()*100+'%',animationDuration:(Math.random()*22+14)+'s',animationDelay:(-Math.random()*22)+'s'});
+    d.className='pt';p.appendChild(d);
+  }
+})();
+
+// LOADER
+const LSTEPS=['Inicializando WebGL...','Carregando modelos 3D...','Processando anatomia...','Calibrando holografia...','Sistema pronto ✓'];
+let lp=0,lsi=0;
+const li=setInterval(()=>{
+  lp+=Math.random()*8+2;if(lp>=100){lp=100;clearInterval(li);setTimeout(finishLoad,400)}
+  document.getElementById('lf').style.width=lp+'%';
+  document.getElementById('lpct').textContent=Math.floor(lp)+'%';
+  const si=Math.min(Math.floor(lp/22),LSTEPS.length-1);
+  if(si!==lsi){lsi=si;document.getElementById('lstep').textContent=LSTEPS[si]}
+},70);
+function finishLoad(){
+  const l=document.getElementById('loader');l.style.opacity='0';setTimeout(()=>l.style.display='none',600);
+  document.getElementById('app').style.opacity='1';
+  buildOList();buildTxtControls();updateNList();startECG();buildAList();
+}
+
+// ── DATA ──────────────────────────────────────────────
+const ORGANS=[
+  {id:'heart',name:'Coração',sys:'Cardiovascular',ico:'❤',col:'#FF1744',
+   desc:'Órgão muscular com quatro câmaras. Realiza sístole e diástole a 60–100 bpm em repouso.',
+   func:'Bombear sangue oxigenado para a circulação sistêmica e desoxigenado para a pulmonar.',
+   cur:'Bate ~100.000 vezes/dia, bombeando aprox. 7.000 L de sangue.',
+   dis:['Infarto do Miocárdio','Insuficiência Cardíaca','Arritmias','DAC','Cardiopatia Congênita'],
+   badge:'3D ATIVO',bc:'c',hasEcg:true,
+   sfSrc:'https://sketchfab.com/models/ac8f37578cd84c3bb4417234cbafb3a2/embed?autostart=1&transparent=1&ui_theme=dark&ui_color=00F5FF&ui_watermark=0&ui_infos=0&ui_controls=1&ui_stop=0&preload=1&dnt=0',
+   rdInfo:'CORACAO // HOMO SAPIENS',rdDetail:'4 CÂMARAS // 2 ÁTRIOS // 2 VENTRÍCULOS'},
+  {id:'brain',name:'Cérebro',sys:'Sistema Nervoso',ico:'🧠',col:'#E91E63',
+   desc:'Centro de controle do SNC dividido em hemisférios, lobos e estruturas subcorticais.',
+   func:'Cognição, controle motor, memória, linguagem, regulação autonômica.',
+   cur:'~86 bilhões de neurônios, trilhões de sinapses. Consome 20% da energia corporal.',
+   dis:['AVC','Tumor Cerebral','Alzheimer','Parkinson','Epilepsia'],
+   badge:'3D ATIVO',bc:'c',hasEcg:false,
+   sfSrc:'https://sketchfab.com/models/41b3c069854643149f351cf130cfaa96/embed?autostart=1&transparent=1&ui_theme=dark&ui_color=E91E63&ui_watermark=0&ui_infos=0&ui_controls=1&ui_stop=0&preload=1&dnt=0',
+   rdInfo:'CEREBRO // HOMO SAPIENS',rdDetail:'HEMISFÉRIOS // LOBOS // CEREBELO'},
+  {id:'pancreas',name:'Pâncreas',sys:'Endócrino',ico:'🟡',col:'#FFEB3B',
+   desc:'Glândula mista retroperitoneal com porção exócrina (ácinos) e endócrina (ilhotas de Langerhans).',
+   func:'Insulina/glucagon (endócrino) + enzimas digestivas lipase, amilase, protease (exócrino).',
+   cur:'Produz ~1,5 L de suco pancreático/dia para neutralizar o quimo ácido.',
+   dis:['Diabetes Mellitus','Pancreatite','Adenocarcinoma Pancreático'],
+   badge:'3D ATIVO',bc:'c',hasEcg:false,
+   sfSrc:'https://sketchfab.com/models/8acf64dc315b49308b4fcbd47e48b92b/embed?autostart=1&transparent=1&ui_theme=dark&ui_color=FFEB3B&ui_watermark=0&ui_infos=0&ui_controls=1&ui_stop=0&preload=1&dnt=0',
+   rdInfo:'PANCREAS // HOMO SAPIENS',rdDetail:'EXÓCRINO // ENDÓCRINO // ILHOTAS DE LANGERHANS'},
+  {id:'lungs',name:'Pulmões',sys:'Respiratório',ico:'🫁',col:'#2196F3',
+   desc:'~300 milhões de alvéolos para troca gasosa. Capacidade total ~6 L.',
+   func:'Hematose — captação de O₂ e eliminação de CO₂.',
+   cur:'Superfície alveolar ~70 m² — equivalente a uma quadra de tênis.',
+   dis:['Pneumonia','DPOC','Asma','Câncer de Pulmão','Tuberculose'],badge:'3D ATIVO',bc:'c',hasEcg:false,
+   sfSrc:'https://sketchfab.com/models/2b8f0656cff846eab3574789df440c33/embed?autostart=1&transparent=1&ui_theme=dark&ui_color=2196F3&ui_watermark=0&ui_infos=0&ui_controls=1&ui_stop=0&preload=1&dnt=0',
+   rdInfo:'PULMOES // HOMO SAPIENS',rdDetail:'BRÔNQUIOS // BRONQUÍOLOS // ALVÉOLOS'},
+  {id:'liver',name:'Fígado',sys:'Digestivo',ico:'🟤',col:'#795548',
+   desc:'Maior glândula do organismo (~1,5 kg) com mais de 500 funções metabólicas.',
+   func:'Metabolismo de nutrientes, bile, síntese de proteínas, detoxificação.',
+   cur:'Único órgão com regeneração completa a partir de apenas 25% do tecido.',
+   dis:['Cirrose','Hepatite Viral','Esteatose','CHC'],badge:'3D ATIVO',bc:'c',hasEcg:false,
+   sfSrc:'https://sketchfab.com/models/76077d3b1b0643a986389e2e1f26d1bb/embed?autostart=1&transparent=1&ui_theme=dark&ui_color=795548&ui_watermark=0&ui_infos=0&ui_controls=1&ui_stop=0&preload=1&dnt=0',
+   rdInfo:'FIGADO // HOMO SAPIENS',rdDetail:'LOBOS // SEGMENTOS DE COUINAUD'},
+  {id:'kidneys',name:'Rins',sys:'Urinário',ico:'🫘',col:'#FF5722',
+   desc:'Par de órgãos retroperitoneais com ~1 milhão de néfrons cada.',
+   func:'Filtração, equilíbrio ácido-base, pressão, eritropoetina.',
+   cur:'Filtram ~180 L de plasma/dia, produzindo 1–2 L de urina.',
+   dis:['IRC','Nefrolitíase','Glomerulonefrite','Síndrome Nefrótica'],badge:'3D ATIVO',bc:'c',hasEcg:false,
+   sfSrc:'https://sketchfab.com/models/fde537a7868b4f8db87450720dc7611f/embed?autostart=1&transparent=1&ui_theme=dark&ui_color=FF5722&ui_watermark=0&ui_infos=0&ui_controls=1&ui_stop=0&preload=1&dnt=0',
+   rdInfo:'RINS // HOMO SAPIENS',rdDetail:'CÓRTEX // MEDULA // PELVE RENAL'},
+  {id:'stomach',name:'Estômago',sys:'Digestivo',ico:'🔵',col:'#FF9800',
+   desc:'Órgão muscular oco com pH 1,5–3,5, entre esôfago e intestino delgado.',
+   func:'Digestão mecânica e química, secreção de HCl e pepsinogênio.',
+   cur:'A mucosa se renova completamente a cada 3–4 dias.',
+   dis:['Gastrite','Úlcera Péptica','Câncer Gástrico','DRGE'],badge:'3D ATIVO',bc:'c',hasEcg:false,
+   sfSrc:'https://sketchfab.com/models/7148476c702340aab6a6579124103ea9/embed?autostart=1&transparent=1&ui_theme=dark&ui_color=FF9800&ui_watermark=0&ui_infos=0&ui_controls=1&ui_stop=0&preload=1&dnt=0',
+   rdInfo:'ESTOMAGO // HOMO SAPIENS',rdDetail:'CÁRDIA // FUNDO // CORPO // PILORO'},
+];
+
+const ORG_STRUCTS={
+  heart:{groups:[
+    {lbl:'Câmaras',items:[
+      {nm:'Ventrículo Esquerdo',col:'#C0392B',dsc:'Câmara sistêmica principal',func:'Circulação sistêmica',desc:'Câmara de maior pressão (~120 mmHg), parede ~11 mm. Bombeia sangue oxigenado para o organismo.',dis:['IAM Anterior','ICC','Cardiomiopatia Dilatada']},
+      {nm:'Ventrículo Direito',col:'#E74C3C',dsc:'Câmara pulmonar',func:'Circulação pulmonar',desc:'Câmara de baixa pressão (~25 mmHg). Bombeia sangue desoxigenado para os pulmões.',dis:['Hipertensão Pulmonar','Cor Pulmonale','TEP']},
+      {nm:'Átrio Esquerdo',col:'#2C5FA8',dsc:'Recepção pulmonar',func:'Recepção das veias pulmonares',desc:'Recebe sangue das 4 veias pulmonares. FA origina-se frequentemente nos óstios pulmonares.',dis:['Fibrilação Atrial','Estenose Mitral','Trombo Atrial']},
+      {nm:'Átrio Direito',col:'#7744AA',dsc:'Recepção sistêmica + NSA',func:'Recepção venosa sistêmica',desc:'Recebe retorno venoso pelas cavas. Contém o nó sinoatrial — marcapasso natural do coração.',dis:['Flutter Atrial','BAV','Disfunção Sinusal']},
+    ]},
+    {lbl:'Grandes Vasos',items:[
+      {nm:'Aorta',col:'#D4A843',dsc:'Artéria sistêmica principal',func:'Distribuição sistêmica',desc:'Maior artéria do organismo. Origina-se no VE e distribui sangue oxigenado para o corpo.',dis:['Aneurisma de Aorta','Dissecção Aórtica','Coarctação']},
+    ]},
+    {lbl:'Válvulas',items:[
+      {nm:'Válvula Mitral',col:'#7EC850',dsc:'Bicúspide AE → VE',func:'Fluxo AE → VE',desc:'Única válvula bicúspide. Estenose grave = área < 1 cm². Associada à febre reumática.',dis:['Estenose Mitral','Insuficiência Mitral','Prolapso Valvar']},
+      {nm:'Válvula Aórtica',col:'#F0A500',dsc:'Semilúnar de saída',func:'Saída VE → Aorta',desc:'Válvula semilúnar com 3 folhetos. Principal causa de troca valvar cirúrgica em adultos.',dis:['Estenose Aórtica','Insuficiência Aórtica','Bicúspide Congênita']},
+    ]},
+    {lbl:'Coronárias',items:[
+      {nm:'Coronária Esquerda',col:'#FF7675',dsc:'LAD + Circunflexa',func:'Nutrição cardíaca (~70% do miocárdio)',desc:'Bifurca em DA e circunflexa. A DA irriga o septo anterior — chamada "widow maker".',dis:['IAM Anterior (DA)','IAM Lateral (Cx)','DAC Multivaso']},
+      {nm:'Coronária Direita',col:'#FD9644',dsc:'Ramo marginal direito',func:'Nutrição cardíaca direita',desc:'Irriga o VD e, em dominância direita (70%), o nó AV. Oclusão → bloqueio AV.',dis:['IAM Inferior','Bloqueio AV','Infarto de VD']},
+    ]},
+  ]},
+  brain:{groups:[
+    {lbl:'Lobos Corticais',items:[
+      {nm:'Lobo Frontal',col:'#E91E63',dsc:'Planejamento e motor',func:'Funções executivas, controle motor, personalidade',desc:'Maior lobo cerebral. Área pré-frontal: planejamento e decisão. Giro pré-central: controle motor voluntário.',dis:['AVC da ACM','Tumor Frontal','Demência Frontotemporal']},
+      {nm:'Lobo Parietal',col:'#9C27B0',dsc:'Integração sensorial',func:'Percepção somatossensorial e espacial',desc:'Processa tato, propriocepção e dor. Giro pós-central é a área sensorial primária.',dis:['Negligência Hemiespacial','Síndrome de Gerstmann','AVC Parietal']},
+      {nm:'Lobo Temporal',col:'#3F51B5',dsc:'Audição e memória',func:'Audição, linguagem (Wernicke), memória declarativa',desc:'Área de Wernicke (T1 esq): compreensão da linguagem. Hipocampo (medial): consolidação da memória.',dis:['Epilepsia Mesial Temporal','Afasia de Wernicke','Amnésia']},
+      {nm:'Lobo Occipital',col:'#00BCD4',dsc:'Processamento visual',func:'Córtex visual primário e associativo',desc:'Córtex estriado (V1) ao redor da fissura calcarina. Lesão bilateral → cegueira cortical.',dis:['Cegueira Cortical','AVC da ACP','Agnosia Visual']},
+    ]},
+    {lbl:'Estruturas Profundas',items:[
+      {nm:'Cerebelo',col:'#FF9800',dsc:'Coordenação e equilíbrio',func:'Coordenação motora fina, equilíbrio, aprendizado motor',desc:'14% do volume cerebral, ~80% dos neurônios totais. Coordena o movimento recebendo aferências do córtex e medula.',dis:['Ataxia Cerebelar','Meduloblastoma','Síndrome de Dandy-Walker']},
+      {nm:'Tronco Encefálico',col:'#795548',dsc:'Funções vitais',func:'Controle respiratório, cardiovascular, consciência (SRAA)',desc:'Mesencéfalo + ponte + bulbo. Contém núcleos dos nervos cranianos III–XII e o sistema reticular ativador ascendente.',dis:['AVC do Tronco','Síndrome de Locked-In','Herniação Transtentorial']},
+      {nm:'Hipocampo',col:'#4CAF50',dsc:'Memória e navegação',func:'Consolidação da memória de longo prazo',desc:'Estrutura do sistema límbico bilateral. Primeiramente afetado no Alzheimer. Nobel 2014: células de lugar.',dis:['Doença de Alzheimer','Epilepsia Mesial Temporal','Amnésia Global Transitória']},
+    ]},
+  ]},
+  pancreas:{groups:[
+    {lbl:'Porção Exócrina (~98%)',items:[
+      {nm:'Células Acinares',col:'#FFEB3B',dsc:'Produção enzimática',func:'Secreção de zimogênios (pré-enzimas digestivas)',desc:'Produzem lipase, amilase e proteases como zimogênios inativos. Ativação ocorre no duodeno pelo enteroquinase.',dis:['Pancreatite Aguda','Pancreatite Crônica','Insuficiência Exócrina']},
+      {nm:'Sistema Ductal',col:'#FFC107',dsc:'Transporte e bicarbonato',func:'Secreção de NaHCO₃ e transporte enzimático',desc:'Células ductais produzem solução alcalina (pH ~8) para neutralizar o quimo ácido no duodeno.',dis:['Coledocolitíase','Estenose Ductal','Adenocarcinoma Pancreático']},
+    ]},
+    {lbl:'Porção Endócrina (~2%) — Ilhotas',items:[
+      {nm:'Células β (Beta)',col:'#FF6F00',dsc:'Insulina',func:'Produção de insulina — reduz glicemia',desc:'~70% das ilhotas de Langerhans. Secretam insulina em resposta à hiperglicemia, promovendo captação de glicose.',dis:['Diabetes Mellitus Tipo 1','Insulinoma','MODY']},
+      {nm:'Células α (Alfa)',col:'#E65100',dsc:'Glucagon',func:'Produção de glucagon — eleva glicemia',desc:'~20% das ilhotas. Secretam glucagon em hipoglicemia, estimulando glicogenólise e gliconeogênese hepáticas.',dis:['Glucagonoma','Diabetes Mellitus Tipo 2','Hipoglicemia']},
+      {nm:'Células δ (Delta)',col:'#BF360C',dsc:'Somatostatina',func:'Inibição parácrina de insulina e glucagon',desc:'~10% das ilhotas. Somatostatina inibe insulina, glucagon, GH e hormônios GI por ação parácrina local.',dis:['Somatostatinoma','Síndrome de Zollinger-Ellison']},
+    ]},
+  ]},
+  lungs:{groups:[
+    {lbl:'Vias Aéreas',items:[
+      {nm:'Traqueia',col:'#1976D2',dsc:'Tubo cartilaginoso central',func:'Condução de ar entre laringe e brônquios principais',desc:'Tubo de ~12 cm sustentado por 16-20 anéis cartilaginosos em forma de "C". Bifurca-se na carina em brônquios principais D e E.',dis:['Estenose Traqueal','Traqueomalácia','Corpo Estranho']},
+      {nm:'Brônquios',col:'#2196F3',dsc:'Ramificação bilateral',func:'Condução de ar aos lobos pulmonares',desc:'O brônquio principal direito é mais vertical e largo — local mais comum de aspiração de corpo estranho.',dis:['Bronquite','Bronquiectasia','Corpo Estranho Aspirado']},
+      {nm:'Bronquíolos',col:'#42A5F5',dsc:'Ramos terminais sem cartilagem',func:'Condução final antes dos alvéolos, regulação de fluxo',desc:'Desprovidos de cartilagem, contêm músculo liso que regula a resistência das vias aéreas — alvo principal da asma.',dis:['Asma','Bronquiolite','DPOC']},
+    ]},
+    {lbl:'Unidades Respiratórias',items:[
+      {nm:'Alvéolos',col:'#90CAF9',dsc:'Trocas gasosas',func:'Hematose — difusão de O₂ e CO₂',desc:'~300 milhões de sacos aéreos por pulmão. A barreira alvéolo-capilar tem espessura de apenas ~0,5 µm.',dis:['Enfisema','SDRA','Fibrose Pulmonar']},
+      {nm:'Pleura',col:'#BBDEFB',dsc:'Membrana serosa dupla',func:'Lubrificação e adesão pulmão-parede torácica',desc:'Pleura visceral e parietal separadas por líquido pleural (~10-20 mL). Pressão negativa mantém o pulmão expandido.',dis:['Pneumotórax','Derrame Pleural','Pleurite']},
+    ]},
+  ]},
+  liver:{groups:[
+    {lbl:'Anatomia Macroscópica',items:[
+      {nm:'Lobo Direito',col:'#6D4C41',dsc:'Maior lobo hepático',func:'Metabolismo, síntese proteica, detoxificação',desc:'Compreende os segmentos V-VIII de Couinaud. Separado do lobo esquerdo pelo ligamento falciforme.',dis:['Carcinoma Hepatocelular','Abscesso Hepático','Metástase Hepática']},
+      {nm:'Lobo Esquerdo',col:'#8D6E63',dsc:'Segmentos II-IV',func:'Mesmas funções metabólicas do parênquima hepático',desc:'Menor que o direito. Os segmentos de Couinaud (I-VIII) orientam ressecções cirúrgicas com base na drenagem vascular.',dis:['Esteato-hepatite','Cirrose Biliar']},
+      {nm:'Vesícula Biliar',col:'#558B2F',dsc:'Armazenamento de bile',func:'Concentração e armazenamento de bile entre refeições',desc:'Capacidade ~50 mL. Contrai em resposta à colecistocinina (CCK) liberada após refeições gordurosas.',dis:['Colelitíase','Colecistite Aguda','Cólica Biliar']},
+    ]},
+    {lbl:'Histologia Funcional',items:[
+      {nm:'Hepatócitos',col:'#A1887F',dsc:'Células parenquimatosas',func:'Síntese proteica, metabolismo, detoxificação',desc:'~80% da massa hepática. Organizados em cordões radiais ao redor da veia central no lóbulo hepático clássico.',dis:['Esteatose Hepática','Hepatite Viral','Insuficiência Hepática']},
+      {nm:'Tríade Portal',col:'#4E342E',dsc:'Veia porta + artéria + ducto biliar',func:'Suprimento sanguíneo duplo e drenagem biliar',desc:'A veia porta fornece ~75% do fluxo sanguíneo hepático (rico em nutrientes); a artéria hepática, ~25% (rico em O₂).',dis:['Hipertensão Portal','Trombose de Veia Porta','Colangite']},
+    ]},
+  ]},
+  kidneys:{groups:[
+    {lbl:'Macroestrutura',items:[
+      {nm:'Córtex Renal',col:'#D84315',dsc:'Camada externa',func:'Contém os glomérulos e túbulos contorcidos',desc:'Região externa de cor marrom-avermelhada onde ocorre a filtração glomerular inicial.',dis:['Glomerulonefrite','Nefrite Lúpica']},
+      {nm:'Medula Renal',col:'#BF360C',dsc:'Pirâmides renais',func:'Concentração da urina via alças de Henle',desc:'Organizada em pirâmides renais cujos ápices (papilas) drenam para os cálices menores.',dis:['Necrose de Papila Renal','Nefrocalcinose']},
+      {nm:'Pelve Renal',col:'#8D6E63',dsc:'Coleta de urina',func:'Coleta da urina antes de seguir ao ureter',desc:'Funil formado pela união dos cálices maiores, contínuo com o ureter.',dis:['Hidronefrose','Nefrolitíase','Pielonefrite']},
+    ]},
+    {lbl:'Unidade Funcional',items:[
+      {nm:'Néfron',col:'#FF7043',dsc:'Unidade filtradora',func:'Filtração, reabsorção e secreção tubular',desc:'~1 milhão por rim. Composto por corpúsculo renal (glomérulo + cápsula de Bowman) e sistema tubular.',dis:['Insuficiência Renal Aguda','Necrose Tubular Aguda']},
+      {nm:'Glomérulo',col:'#FF8A65',dsc:'Filtro capilar',func:'Filtração do plasma sanguíneo',desc:'Rede de capilares filtra ~180 L de plasma/dia. A barreira de filtração impede a passagem de proteínas grandes.',dis:['Síndrome Nefrótica','Glomeruloesclerose','Diabetes Mellitus (Nefropatia)']},
+    ]},
+  ]},
+  stomach:{groups:[
+    {lbl:'Regiões Anatômicas',items:[
+      {nm:'Cárdia',col:'#F57C00',dsc:'Junção esofagogástrica',func:'Transição entre esôfago e estômago',desc:'Contém o esfíncter esofágico inferior, que previne o refluxo do conteúdo gástrico para o esôfago.',dis:['DRGE','Acalasia','Hérnia de Hiato']},
+      {nm:'Fundo',col:'#FB8C00',dsc:'Porção superior',func:'Armazenamento e acomodação de gás',desc:'Região superior arredondada que armazena ar engolido e acomoda a distensão pós-prandial.',dis:['Volvo Gástrico','Úlcera de Fundo']},
+      {nm:'Corpo',col:'#FFA726',dsc:'Porção principal',func:'Maior área secretora de HCl e pepsinogênio',desc:'Contém a maior densidade de células parietais (HCl) e principais (pepsinogênio) do estômago.',dis:['Gastrite','Úlcera Gástrica','Adenocarcinoma Gástrico']},
+      {nm:'Piloro',col:'#FFB74D',dsc:'Saída gástrica',func:'Controle do esvaziamento gástrico para o duodeno',desc:'O esfíncter pilórico regula a passagem do quimo em pequenas quantidades para o duodeno.',dis:['Estenose Pilórica','Síndrome de Dumping']},
+    ]},
+    {lbl:'Histologia Secretora',items:[
+      {nm:'Células Parietais',col:'#E65100',dsc:'Secreção de HCl',func:'Produção de ácido clorídrico e fator intrínseco',desc:'Secretam HCl (pH gástrico 1,5-3,5) e fator intrínseco, essencial para absorção de vitamina B12.',dis:['Gastrite Atrófica','Anemia Perniciosa','Síndrome de Zollinger-Ellison']},
+      {nm:'Células Principais',col:'#D84315',dsc:'Secreção de pepsinogênio',func:'Produção de pepsinogênio — precursor da pepsina',desc:'Ativado em pepsina pelo pH ácido, inicia a digestão proteica no estômago.',dis:['Pancreatite (assoc.)','Úlcera Péptica']},
+    ]},
+  ]},
+};
+
+let activeOrg='heart',orgTextLabels={};
+
+// ── ORGAN LIST ────────────────────────────────────────
+function buildOList(filter=''){
+  const list=document.getElementById('olist');list.innerHTML='';
+  const groups={};
+  ORGANS.filter(o=>!filter||o.name.toLowerCase().includes(filter.toLowerCase())||o.sys.toLowerCase().includes(filter.toLowerCase()))
+    .forEach(o=>{(groups[o.sys]=groups[o.sys]||[]).push(o)});
+  Object.entries(groups).forEach(([sys,items])=>{
+    const lbl=document.createElement('div');lbl.className='syslbl';lbl.textContent=sys;list.appendChild(lbl);
+    items.forEach(o=>{
+      const el=document.createElement('div');el.className='oitem'+(o.id===activeOrg?' on':'');
+      const bC=o.bc==='c'?'rgba(0,245,255,.08)':'rgba(58,88,112,.06)';
+      const bBo=o.bc==='c'?'rgba(0,245,255,.28)':'rgba(58,88,112,.25)';
+      const bTx=o.bc==='c'?'var(--cyan)':'var(--text3)';
+      el.innerHTML=`<div class="oico" style="background:${o.col}14;border-color:${o.col}28">${o.ico}</div>
+        <div style="flex:1;min-width:0"><div class="onm">${o.name}</div><div class="osys">${o.sys}</div></div>
+        <span class="obadge" style="background:${bC};border:.5px solid ${bBo};color:${bTx}">${o.badge}</span>`;
+      el.onclick=()=>selOrg(o.id);list.appendChild(el);
+    });
+  });
+}
+
+function selOrg(id){
+  if(activeOrg&&activeOrg!==id){orgTextLabels[activeOrg]=textLabels.slice()}
+  activeOrg=id;buildOList(document.getElementById('srch').value);
+  const o=ORGANS.find(x=>x.id===id);if(!o)return;
+  showInfo(o.name,`
+    <div class="ifield"><div class="ikey">Sistema</div><div class="ival">${o.sys}</div></div>
+    <div class="ifield"><div class="ikey">Descrição</div><div class="ival">${o.desc}</div></div>
+    <div class="ifield"><div class="ikey">Função</div><div class="ival hl">${o.func}</div></div>
+    <div class="idiv"></div>
+    <div class="ifield"><div class="ikey">Curiosidade</div><div class="ival">${o.cur}</div></div>
+    <div class="ifield"><div class="ikey">Patologias</div><div class="tlist">${o.dis.map(d=>`<span class="tag r">${d}</span>`).join('')}</div></div>`);
+  // ECG visibility
+  const ecgCtrl=document.getElementById('ecgCtrl');
+  const bbarEcg=document.getElementById('bbarEcg');
+  const rdBpm=document.getElementById('rdBpm');
+  ecgCtrl.style.display=o.hasEcg?'block':'none';
+  bbarEcg.style.display=o.hasEcg?'flex':'none';
+  rdBpm.style.display=o.hasEcg?'block':'none';
+  // rebuild anatomy list for this organ
+  buildAList();
+  if(o.sfSrc){
+    document.getElementById('sfFrame').src=o.sfSrc;
+    document.getElementById('sfReadoutL').textContent=o.rdInfo;
+    document.getElementById('sfReadoutBot').textContent=o.rdDetail;
+    const layer=document.getElementById('annLayer');
+    layer.querySelectorAll('.mlabel').forEach(p=>p.remove());
+    textLabels=(orgTextLabels[id]||[]).slice();
+    textLabels.forEach(t=>renderLabel(t));
+    updateNList();
+    showToast(o.name,`Modelo 3D de <strong>${o.name}</strong> carregado.`,1800);
+  } else {
+    showToast('Em Breve',`Modelo 3D de <strong>${o.name}</strong> estará disponível em breve.`,2800);
+  }
+}
+
+// ── ANATOMY LIST — dinâmica por órgão ─────────────────
+function buildAList(){
+  const list=document.getElementById('alist');list.innerHTML='';
+  const data=ORG_STRUCTS[activeOrg];
+  if(!data){
+    list.innerHTML=`<div class="empty">Estruturas detalhadas de<br><span style="color:var(--cyan)">${ORGANS.find(o=>o.id===activeOrg)?.name||''}</span><br>em breve.</div>`;
+    return;
+  }
+  data.groups.forEach(g=>{
+    const lbl=document.createElement('div');lbl.className='albl';lbl.textContent=g.lbl;list.appendChild(lbl);
+    g.items.forEach(item=>{
+      const el=document.createElement('div');el.className='aitem';
+      el.innerHTML=`<div class="adot" style="background:${item.col}"></div><div><div class="anm">${item.nm}</div><div class="adsc">${item.dsc}</div></div>`;
+      el.onclick=()=>showInfo(item.nm,`
+        <div class="ifield"><div class="ikey">Função</div><div class="ival hl">${item.func}</div></div>
+        <div class="ifield"><div class="ikey">Descrição</div><div class="ival">${item.desc}</div></div>
+        <div class="idiv"></div>
+        <div class="ifield"><div class="ikey">Patologias</div><div class="tlist">${item.dis.map(d=>`<span class="tag r">${d}</span>`).join('')}</div></div>`);
+      list.appendChild(el);
+    });
+  });
+}
+
+function showInfo(title,html){
+  document.getElementById('iPanTitle').textContent=title;
+  document.getElementById('iPanBody').innerHTML=html;
+  document.getElementById('infoPan').style.display='block';
+}
+
+// TOAST
+function showToast(title,msg,dur=2500){
+  const t=document.createElement('div');t.className='toast';
+  t.innerHTML=`<div class="tttl">${title}</div>${msg}`;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .28s,transform .28s';t.style.opacity='0';t.style.transform='translateX(12px)';setTimeout(()=>t.remove(),300)},dur);
+}
+
+// TOOL
+let activeTool='rotate';
+function setTool(t){
+  activeTool=t;
+  ['rotate','text'].forEach(x=>{
+    const el=document.getElementById('tb'+x[0].toUpperCase());
+    if(el)el.classList.toggle('on',x===t);
+  });
+  const chip=document.getElementById('toolChip');
+  const sfWrap=document.getElementById('sfWrap');
+  const layer=document.getElementById('annLayer');
+  if(t==='text'){
+    chip.className='chip on';chip.style.borderColor='rgba(255,184,0,.4)';chip.style.color='var(--amber)';
+    chip.innerHTML='✍ Modo Texto &nbsp;·&nbsp; clique para sair';
+    layer.style.pointerEvents='all';layer.style.cursor='crosshair';sfWrap.style.pointerEvents='none';
+    showToast('Modo Texto','Clique para inserir texto. Arraste para mover.',2400);
+  } else {
+    chip.className='chip';chip.style.cssText='display:none';
+    layer.style.pointerEvents='none';layer.style.cursor='default';sfWrap.style.pointerEvents='all';
+  }
+}
+
+// ── NOTES (texto no modelo) ────────────────────────────
+let pendAnn=null;
+
+document.getElementById('annLayer').addEventListener('click',e=>{
+  if(e.target.closest('.mlabel')||e.target.closest('#txtMod'))return;
+  const vp=document.getElementById('vp');
+  const vpRect=vp.getBoundingClientRect();
+  const px=e.clientX-vpRect.left, py=e.clientY-vpRect.top;
+  if(activeTool==='text'){
+    const m=document.getElementById('txtMod');
+    const mw=236,mh=195;
+    m.style.left=Math.max(4,Math.min(px+12,vpRect.width-mw-4))+'px';
+    m.style.top=Math.max(4,Math.min(py+12,vpRect.height-mh-4))+'px';
+    m.classList.add('on');
+    document.getElementById('txtInput').value='';
+    document.getElementById('txtInput').focus();
+    pendAnn={px,py};
+  }
+});
+
+function updateNList(){
+  const list=document.getElementById('nlist');
+  const stab=document.getElementById('stab-notes');
+  const orgName=ORGANS.find(o=>o.id===activeOrg)?.name||'Órgão';
+  const total=textLabels.length;
+  if(!total){
+    list.innerHTML=`<div class="empty">Sem notas em<br><span style="color:var(--cyan)">${orgName}</span>.<br><br>Use <span style="color:var(--amber)">✍ Escrever</span> para marcar o modelo.</div>`;
+    stab.innerHTML='Notas';return;
+  }
+  stab.innerHTML='Notas<span class="nbadge">'+total+'</span>';
+  list.innerHTML=`<div style="font-family:'JetBrains Mono',monospace;font-size:7.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:8px 7px 4px">📍 ${orgName}</div>`
+    +textLabels.map(l=>`<div class="nitem"><div class="ndot" style="background:${l.col}"></div><div style="flex:1;min-width:0"><div class="nnum" style="color:var(--amber)">TEXTO #${l.id}</div><div class="ntxt">${l.txt}</div></div><button class="ndel" onclick="event.stopPropagation();delLabel(${l.id})">×</button></div>`).join('');
+}
+
+// ── TEXT LABELS ────────────────────────────────────────
+const LCOLS=['#00F5FF','#FFFFFF','#FFB800','#00FF88','#FF006E','#AB47BC'];
+const LSIZES=[{lbl:'P',sz:'11px'},{lbl:'M',sz:'15px'},{lbl:'G',sz:'20px'},{lbl:'XG',sz:'27px'}];
+let textLabels=[],lblCount=0,selLblColor='#00F5FF',selLblSize='15px';
+
+function buildTxtControls(){
+  const szrow=document.getElementById('tszrow');szrow.innerHTML='';
+  LSIZES.forEach(s=>{
+    const b=document.createElement('button');b.className='tszbtn'+(s.sz===selLblSize?' on':'');
+    b.textContent=s.lbl;b.onclick=()=>{selLblSize=s.sz;document.querySelectorAll('.tszbtn').forEach(x=>x.classList.remove('on'));b.classList.add('on')};
+    szrow.appendChild(b);
+  });
+  const crow=document.getElementById('tcolrow');crow.innerHTML='';
+  LCOLS.forEach(c=>{
+    const s=document.createElement('div');s.className='tcolswatch'+(c===selLblColor?' on':'');
+    s.style.background=c;
+    s.onclick=()=>{selLblColor=c;document.querySelectorAll('.tcolswatch').forEach(x=>x.classList.remove('on'));s.classList.add('on')};
+    crow.appendChild(s);
+  });
+}
+
+function closeTxtMod(){document.getElementById('txtMod').classList.remove('on');pendAnn=null}
+function saveTxtLabel(){
+  const txt=document.getElementById('txtInput').value.trim();
+  if(!txt||!pendAnn){closeTxtMod();return}
+  lblCount++;
+  const lbl={id:lblCount,txt,col:selLblColor,size:selLblSize,px:pendAnn.px,py:pendAnn.py};
+  textLabels.push(lbl);if(activeOrg)orgTextLabels[activeOrg]=textLabels.slice();
+  renderLabel(lbl);closeTxtMod();updateNList();
+}
+
+function renderLabel(lbl){
+  const el=document.createElement('div');el.className='mlabel';el.id='mlbl-'+lbl.id;
+  el.style.cssText=`left:${lbl.px}px;top:${lbl.py}px;font-size:${lbl.size};color:${lbl.col};`;
+  el.innerHTML=`${lbl.txt}<div class="mlabel-del" onclick="delLabel(${lbl.id})">×</div>`;
+  let dragging=false,ox=0,oy=0;
+  el.addEventListener('mousedown',e=>{
+    if(e.target.classList.contains('mlabel-del'))return;
+    const r=document.getElementById('vp').getBoundingClientRect();
+    ox=(e.clientX-r.left)-lbl.px;oy=(e.clientY-r.top)-lbl.py;
+    dragging=true;e.preventDefault();e.stopPropagation();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    const r=document.getElementById('vp').getBoundingClientRect();
+    lbl.px=(e.clientX-r.left)-ox;lbl.py=(e.clientY-r.top)-oy;
+    el.style.left=lbl.px+'px';el.style.top=lbl.py+'px';
+  });
+  document.addEventListener('mouseup',()=>{if(dragging){dragging=false;if(activeOrg)orgTextLabels[activeOrg]=textLabels.slice()}});
+  document.getElementById('annLayer').appendChild(el);
+}
+function delLabel(id){
+  textLabels=textLabels.filter(l=>l.id!==id);if(activeOrg)orgTextLabels[activeOrg]=textLabels.slice();
+  const el=document.getElementById('mlbl-'+id);if(el)el.remove();updateNList();
+}
+
+// ── ECG ────────────────────────────────────────────────
+let bpm=72,beatOn=true,ecgPh=0;
+function setBPM(v){
+  bpm=parseInt(v);
+  document.getElementById('bpmNum').textContent=v;
+  document.getElementById('bpmValSb').textContent=v;
+  document.getElementById('bpmSlider').value=v;
+  document.getElementById('rdBpm').textContent=`BPM: ${v} // ${v<60?'BRADICARDIA':v>100?'TAQUICARDIA':'NORMAL'}`;
+}
+function toggleBeat(){
+  beatOn=!beatOn;
+  const lbl=beatOn?'⏸ Parar':'▶ Iniciar';
+  const cls=beatOn?'hbtn prim':'hbtn';
+  ['beatBtn','beatBtnSb'].forEach(id=>{const el=document.getElementById(id);if(el){el.textContent=lbl+' Batimento';el.className=cls}});
+}
+function startECG(){
+  const canvas=document.getElementById('ecgC');const ctx=canvas.getContext('2d');
+  function wave(t){
+    const m=((t%1)+1)%1;
+    if(m<.08)return Math.sin(m/.08*Math.PI)*.22;
+    if(m<.16)return 0;
+    if(m<.20)return Math.sin((m-.16)/.04*Math.PI)*-.14;
+    if(m<.24)return Math.sin((m-.20)/.04*Math.PI)*1.0;
+    if(m<.32)return Math.sin((m-.24)/.08*Math.PI)*-.28;
+    if(m<.52)return Math.sin((m-.32)/.20*Math.PI)*.16;
+    return 0;
+  }
+  (function draw(){
+    requestAnimationFrame(draw);
+    if(beatOn)ecgPh+=bpm/60*.016;
+    ctx.clearRect(0,0,110,30);
+    ctx.strokeStyle='#00F5FF';ctx.lineWidth=1.3;ctx.shadowColor='#00F5FF';ctx.shadowBlur=4;
+    ctx.beginPath();
+    for(let x=0;x<110;x++){const t=beatOn?ecgPh-(110-x)/110*2.2:0;const y=15-wave(t)*11;x===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
+    ctx.stroke();
+    if(!beatOn){ctx.strokeStyle='rgba(0,245,255,.15)';ctx.lineWidth=.5;ctx.shadowBlur=0;ctx.beginPath();ctx.moveTo(0,15);ctx.lineTo(110,15);ctx.stroke()}
+  })();
+}
+
+function sstab(name,el){
+  document.querySelectorAll('.stab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.spane').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');document.getElementById('sp-'+name).classList.add('on');
+}
+
+function reloadModel(){const f=document.getElementById('sfFrame');f.src=f.src}
+function openFullSF(){
+  const f=document.getElementById('sfFrame');
+  if(f.requestFullscreen)f.requestFullscreen();
+  else if(f.webkitRequestFullscreen)f.webkitRequestFullscreen();
+  else window.open(f.src,'_blank');
+}
+</script>
+</body>
+</html>
